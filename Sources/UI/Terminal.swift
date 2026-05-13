@@ -1,4 +1,21 @@
+// Terminal.swift - Terminal control and rendering
+
 import Darwin
+import Foundation
+
+// MARK: - Terminal Colors
+
+enum Color: String {
+    case red = "\u{001B}[31m"
+    case green = "\u{001B}[32m"
+    case yellow = "\u{001B}[33m"
+    case blue = "\u{001B}[34m"
+    case magenta = "\u{001B}[35m"
+    case cyan = "\u{001B}[36m"
+    case orange = "\u{001B}[38;5;208m"
+}
+
+// MARK: - Terminal Control
 
 struct Terminal {
     static let clear = "\u{001B}[H\u{001B}[2J\u{001B}[3J"
@@ -8,14 +25,6 @@ struct Terminal {
     static let showCursor = "\u{001B}[?25h"
     static let reset = "\u{001B}[0m"
     static let bold = "\u{001B}[1m"
-
-    static let cyan = "\u{001B}[36m"
-    static let yellow = "\u{001B}[33m"
-    static let magenta = "\u{001B}[35m"
-    static let green = "\u{001B}[32m"
-    static let red = "\u{001B}[31m"
-    static let blue = "\u{001B}[34m"
-    static let orange = "\u{001B}[38;5;208m"
 
     static func getTerminalSize() -> (rows: Int, cols: Int) {
         var w = winsize()

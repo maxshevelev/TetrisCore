@@ -1,4 +1,4 @@
-// Model/TetrisGame.swift
+// TetrisGame.swift - Core game logic
 
 import Foundation
 
@@ -12,12 +12,21 @@ class TetrisGame {
     var score = 0
     var linesCleared = 0
     var paused = false
-    var pieceColor = ""
 
     var level: Int {
         min(10, max(1, linesCleared / 10 + 1))
     }
-    
+
+    var dropInterval: TimeInterval {
+        max(0.15, 0.8 - Double(level - 1) * 0.06)
+    }
+
+    private let lockDelay: TimeInterval = 0.5
+    private var currentX = 0
+    private var currentY = 0
+    private var lastDropTime: Date!
+    private var lockTime: Date?
+
     init() {
         grid = Array(repeating: Array(repeating: "", count: width), count: height)
         spawnNextPiece()
@@ -26,13 +35,13 @@ class TetrisGame {
 
     private func spawnNextPiece() {
         let shapes: [TetrominoShape] = [.I, .O, .T, .S, .Z, .J, .L]
-        nextPiece = Tetromino(shape: shapes.randomElement()!)
+        guard let shape = shapes.randomElement() else { return }
+        nextPiece = Tetromino(shape: shape)
     }
 
     private func spawnNewPiece() {
         currentPiece = nextPiece
-        if let piece = currentPiece {
-            pieceColor = piece.shape.color
+        if currentPiece != nil {
             currentX = width / 2 - 2
             currentY = -1
             lastDropTime = Date()
@@ -222,7 +231,7 @@ class TetrisGame {
                 if let piece = currentPiece {
                     for (px, py) in piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY) {
                         if px == x && py == y {
-                            color = pieceColor
+                            color = piece.shape.color
                             break
                         }
                     }
@@ -255,7 +264,7 @@ class TetrisGame {
 
         output += Terminal.cursorPosition(row: startRow + height + 5, col: centerColumn(for: statusText))
         if paused {
-            output += Terminal.bold + Terminal.red + statusText + Terminal.reset
+            output += Terminal.bold + Color.red.rawValue + statusText + Terminal.reset
         } else {
             output += statusText
         }
@@ -263,12 +272,4 @@ class TetrisGame {
         print(output, terminator: "")
         fflush(stdout)
     }
-
-    private let dropInterval: TimeInterval = 0.5
-    private let lockDelay: TimeInterval = 0.5
-    private var currentX = 0
-    private var currentY = 0
-    private var lastDropTime: Date!
-    private var lockTime: Date?
 }
-

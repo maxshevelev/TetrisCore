@@ -1,5 +1,6 @@
-// UI/InputHandler.swift
+// InputHandler.swift - Non-blocking input handling
 
+import Darwin
 import Foundation
 
 class InputHandler {
@@ -24,8 +25,8 @@ class InputHandler {
         raw.c_iflag &= ~(UInt(IXON) | UInt(ICRNL) | UInt(BRKINT) | UInt(INPCK) | UInt(ISTRIP))
         raw.c_oflag &= ~(UInt(OPOST))
         raw.c_cflag |= UInt(CS8)
-        raw.c_cc.16 = 1
-        raw.c_cc.17 = 0
+        raw.c_cc.16 = 1  // VMIN
+        raw.c_cc.17 = 0  // VTIME
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw)
     }
 
