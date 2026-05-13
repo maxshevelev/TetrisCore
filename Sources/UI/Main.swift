@@ -1,4 +1,4 @@
-// Main.swift - Game entry point with controller logic
+// Main.swift - Game entry point with event-driven architecture
 
 import Foundation
 
@@ -9,14 +9,12 @@ struct Tetris {
         let game = TetrisGame()
         let renderer = GameRenderer()
 
-        let baseDropInterval: TimeInterval = 0.8
-
         print(Terminal.hideCursor)
         print(Terminal.clear)
 
-        var lastDropTime = Date()
-
+        // Main game loop - UI is driven by Model events
         while !game.gameOver {
+            // Process input
             if let input = inputHandler.getInput() {
                 switch input {
                 case "j": game.moveLeft()
@@ -29,44 +27,12 @@ struct Tetris {
                 }
             }
 
-            if !game.paused {
-                let now = Date()
-                let dropInterval = max(0.15, baseDropInterval - Double(game.level - 1) * 0.06)
+            // Update game state with elapsed time
+            let now = Date()
+            game.update(0, now: now)
 
-                // Auto drop based on gravity interval
-                if now.timeIntervalSince(lastDropTime) > dropInterval {
-                    game.moveDown()
-                    lastDropTime = now
-                }
-
-                // Handle piece locking
-                if game.shouldLock(now) {
-                    if game.currentPiece != nil {
-                        if game.canMoveDown() {
-                            game.moveDown()
-                            lastDropTime = now
-                        } else {
-                            game.lockPiece()
-                            game.clearLines()
-                            game.spawnNewPieceAndClear()
-                            lastDropTime = now
-                        }
-                    }
-                }
-            }
-
-            let renderOutput = renderer.render(
-                grid: game.grid,
-                currentPiece: game.currentPiece,
-                currentX: game.pieceX,
-                currentY: game.pieceY,
-                nextPiece: game.nextPiece,
-                score: game.score,
-                level: game.level,
-                dropInterval: max(0.15, baseDropInterval - Double(game.level - 1) * 0.06),
-                paused: game.paused,
-                gameOver: game.gameOver
-            )
+            // Render the current state
+            let renderOutput = renderer.render(state: game.gameState)
             print(renderOutput, terminator: "")
             fflush(stdout)
 

@@ -2,6 +2,11 @@
 
 import Foundation
 
+/// Protocol for listening to game events
+protocol GameEventListener: AnyObject {
+    func onGameEvent(_ event: GameEvent)
+}
+
 class TetrisGame {
     let width: Int = 10
     let height: Int = 20
@@ -26,10 +31,47 @@ class TetrisGame {
     var pieceX: Int { currentX }
     var pieceY: Int { currentY }
 
+    // Event listener (weak to avoid retain cycles)
+    weak var listener: GameEventListener?
+
+    // Game state snapshot for UI polling
+    var gameState: GameSessionState {
+        GameSessionState(
+            grid: grid,
+            currentPiece: currentPiece,
+            currentX: currentX,
+            currentY: currentY,
+            nextPiece: nextPiece,
+            score: score,
+            level: level,
+            paused: paused,
+            gameOver: gameOver
+        )
+    }
+
     // Check if lock timer has expired
     func shouldLock(_ now: Date = Date()) -> Bool {
         guard let lockTime = lockTime else { return false }
         return now >= lockTime
+    }
+
+    /// Update game state with elapsed time
+    /// Call this each frame with the time delta to handle auto-drop and lock timing
+    func update(_ deltaTime: TimeInterval, now: Date = Date()) {
+        guard !paused && !gameOver else { return }
+
+        // Check for piece lock delay
+        if shouldLock(now) {
+            if currentPiece != nil {
+                if canMoveDown() {
+                    moveDown()
+                } else {
+                    lockPiece()
+                    clearLines()
+                    spawnNewPieceAndClear()
+                }
+            }
+        }
     }
 
     init() {
@@ -52,9 +94,11 @@ class TetrisGame {
 
             if isColliding() {
                 gameOver = true
+                notify(.gameOver)
             }
         }
         spawnNextPiece()
+        notify(.pieceSpawned)
     }
 
     func isColliding() -> Bool {
@@ -76,6 +120,7 @@ class TetrisGame {
             currentX += 1
             return
         }
+        notify(.pieceMoved)
     }
 
     func moveRight() {
@@ -84,6 +129,7 @@ class TetrisGame {
             currentX -= 1
             return
         }
+        notify(.pieceMoved)
     }
 
     func moveDown() {
@@ -98,6 +144,7 @@ class TetrisGame {
             // Can still move, clear lock timer
             lockTime = nil
         }
+        notify(.pieceMoved)
     }
 
     func canMoveDown() -> Bool {
@@ -114,6 +161,7 @@ class TetrisGame {
             piece.rotateBack()
             return
         }
+        notify(.pieceRotated)
     }
 
     func hardDrop() {
@@ -124,6 +172,9 @@ class TetrisGame {
                 break
             }
         }
+        // After hard drop, immediately set lock time
+        lockTime = Date().addingTimeInterval(lockDelay)
+        notify(.pieceMoved)
     }
 
     func lockPiece() {
@@ -134,6 +185,7 @@ class TetrisGame {
             }
         }
         currentPiece = nil
+        notify(.pieceLocked)
     }
 
     func clearLines() {
@@ -144,12 +196,18 @@ class TetrisGame {
             }
         }
 
+        guard !linesToClear.isEmpty else { return }
+
         for y in linesToClear.sorted(by: >) {
             grid.remove(at: y)
             grid.insert(Array(repeating: .empty, count: width), at: 0)
             score += 100
             linesCleared += 1
         }
+
+        notify(.scoreChanged(score: score))
+        notify(.levelChanged(level: level))
+        notify(.lineCleared(lines: linesToClear.count, score: score))
     }
 
     func spawnNewPieceAndClear() {
@@ -157,4 +215,22 @@ class TetrisGame {
         clearLines()
         spawnNewPiece()
     }
+
+    // Notify listener of events
+    private func notify(_ event: GameEvent) {
+        listener?.onGameEvent(event)
+    }
+}
+
+/// Immutable snapshot of game state for UI rendering
+struct GameSessionState {
+    let grid: [[BlockState]]
+    let currentPiece: Tetromino?
+    let currentX: Int
+    let currentY: Int
+    let nextPiece: Tetromino?
+    let score: Int
+    let level: Int
+    let paused: Bool
+    let gameOver: Bool
 }
