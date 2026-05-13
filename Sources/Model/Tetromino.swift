@@ -5,15 +5,15 @@ import Foundation
 enum TetrominoShape: String {
     case I, O, T, S, Z, J, L
 
-    var color: String {
+    var blockColor: TetrominoColor {
         switch self {
-        case .I: return "\u{001B}[36m"  // Cyan
-        case .O: return "\u{001B}[33m"  // Yellow
-        case .T: return "\u{001B}[35m"  // Magenta
-        case .S: return "\u{001B}[32m"  // Green
-        case .Z: return "\u{001B}[31m"  // Red
-        case .J: return "\u{001B}[34m"  // Blue
-        case .L: return "\u{001B}[38;5;208m"  // Orange
+        case .I:    return .cyan
+        case .O:    return .yellow
+        case .T:    return .magenta
+        case .S:    return .green
+        case .Z:    return .red
+        case .J:    return .blue
+        case .L:    return .orange
         }
     }
 
