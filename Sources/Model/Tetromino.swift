@@ -1,17 +1,19 @@
-// Model/Tetromino.swift
+// Tetromino.swift - Tetromino shape definitions and rendering
 
-enum TetrominoShape {
+import Foundation
+
+enum TetrominoShape: String {
     case I, O, T, S, Z, J, L
 
     var color: String {
         switch self {
-        case .I: return Terminal.cyan
-        case .O: return Terminal.yellow
-        case .T: return Terminal.magenta
-        case .S: return Terminal.green
-        case .Z: return Terminal.red
-        case .J: return Terminal.blue
-        case .L: return Terminal.orange
+        case .I: return "\u{001B}[36m"  // Cyan
+        case .O: return "\u{001B}[33m"  // Yellow
+        case .T: return "\u{001B}[35m"  // Magenta
+        case .S: return "\u{001B}[32m"  // Green
+        case .Z: return "\u{001B}[31m"  // Red
+        case .J: return "\u{001B}[34m"  // Blue
+        case .L: return "\u{001B}[38;5;208m"  // Orange
         }
     }
 
@@ -45,15 +47,15 @@ enum TetrominoShape {
             return [
                 [[0, 0], [0, 1], [1, 1], [2, 1]],
                 [[1, 0], [2, 0], [1, 1], [1, 2]],
-                [[0, 1], [1, 1], [2, 1], [1, 2]],
-                [[1, 0], [0, 1], [1, 1], [1, 2]]
+                [[0, 1], [1, 1], [2, 1], [2, 2]],
+                [[1, 0], [1, 1], [1, 2], [0, 2]]
             ]
         case .L:
             return [
                 [[2, 0], [0, 1], [1, 1], [2, 1]],
-                [[1, 0], [2, 0], [1, 1], [1, 2]],
+                [[1, 0], [1, 1], [1, 2], [2, 2]],
                 [[0, 1], [1, 1], [2, 1], [0, 2]],
-                [[1, 0], [0, 1], [1, 1], [2, 1]]
+                [[0, 0], [1, 0], [1, 1], [1, 2]]
             ]
         }
     }
@@ -61,21 +63,37 @@ enum TetrominoShape {
 
 class Tetromino {
     let shape: TetrominoShape
-    var orientation = 0
+    private var _rotationIndex = 0
 
     init(shape: TetrominoShape) {
         self.shape = shape
     }
 
-    func getAbsoluteCoordinates(xOffset: Int, yOffset: Int) -> [(Int, Int)] {
-        return shape.blocks[orientation].map { (xOffset + $0[0], yOffset + $0[1]) }
+    var rotationIndex: Int {
+        (_rotationIndex % shape.blocks.count + shape.blocks.count) % shape.blocks.count
+    }
+
+    var blocks: [[Int]] {
+        shape.blocks[rotationIndex]
+    }
+
+    func getAbsoluteCoordinates(xOffset: Int, yOffset: Int) -> [(x: Int, y: Int)] {
+        return blocks.map { block in
+            (x: xOffset + block[0], y: yOffset + block[1])
+        }
     }
 
     func rotate() {
-        orientation = (orientation + 1) % shape.blocks.count
+        _rotationIndex -= 1
     }
 
     func rotateBack() {
-        orientation = (orientation - 1 + shape.blocks.count) % shape.blocks.count
+        _rotationIndex += 1
+    }
+
+    func clone() -> Tetromino {
+        let clone = Tetromino(shape: shape)
+        clone._rotationIndex = _rotationIndex
+        return clone
     }
 }
