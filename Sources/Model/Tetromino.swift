@@ -2,10 +2,10 @@
 
 import Foundation
 
-enum TetrominoShape: String {
+public enum TetrominoShape: String {
     case I, O, T, S, Z, J, L
 
-    var blockColor: TetrominoColor {
+    public var blockColor: TetrominoColor {
         switch self {
         case .I:    return .cyan
         case .O:    return .yellow
@@ -61,8 +61,8 @@ enum TetrominoShape: String {
     }
 }
 
-class Tetromino {
-    let shape: TetrominoShape
+public class Tetromino {
+    public let shape: TetrominoShape
     private var _rotationIndex = 0
 
     init(shape: TetrominoShape) {
@@ -73,11 +73,11 @@ class Tetromino {
         (_rotationIndex % shape.blocks.count + shape.blocks.count) % shape.blocks.count
     }
 
-    var blocks: [[Int]] {
+    public var blocks: [[Int]] {
         shape.blocks[rotationIndex]
     }
 
-    func getAbsoluteCoordinates(xOffset: Int, yOffset: Int) -> [(x: Int, y: Int)] {
+    public func getAbsoluteCoordinates(xOffset: Int, yOffset: Int) -> [(x: Int, y: Int)] {
         return blocks.map { block in
             (x: xOffset + block[0], y: yOffset + block[1])
         }

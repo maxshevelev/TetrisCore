@@ -1,9 +1,36 @@
-// GameRenderer.swift - UI rendering for tetris game state
+// Terminal.swift - Console UI module (Terminal + Renderer + Input)
 
+import Darwin
 import Foundation
+import Model
 
-/// Protocol for terminal operations - enables dependency injection for testing
-protocol TerminalProtocol {
+// MARK: - Terminal Control
+
+public struct Terminal {
+    public static let clear = "\u{001B}[H\u{001B}[2J\u{001B}[3J"
+    public static let home = "\u{001B}[H"
+    public static let eraseDown = "\u{001B}[0J"
+    public static let hideCursor = "\u{001B}[?25l"
+    public static let showCursor = "\u{001B}[?25h"
+    public static let reset = "\u{001B}[0m"
+    public static let bold = "\u{001B}[1m"
+
+    public static func getTerminalSize() -> (rows: Int, cols: Int) {
+        var w = winsize()
+        if ioctl(STDOUT_FILENO, UInt(TIOCGWINSZ), &w) == 0 {
+            return (rows: Int(w.ws_row), cols: Int(w.ws_col))
+        }
+        return (rows: 24, cols: 80)
+    }
+
+    public static func cursorPosition(row: Int, col: Int) -> String {
+        return "\u{001B}[\(row);\(col)H"
+    }
+}
+
+// MARK: - TerminalOperations Protocol
+
+public protocol TerminalOperations {
     var clear: String { get }
     var home: String { get }
     var eraseDown: String { get }
@@ -11,50 +38,62 @@ protocol TerminalProtocol {
     var showCursor: String { get }
     var reset: String { get }
     var bold: String { get }
-
     func getTerminalSize() -> (rows: Int, cols: Int)
     func cursorPosition(row: Int, col: Int) -> String
 }
 
-/// Concrete terminal implementation
-struct TerminalAdapter: TerminalProtocol {
-    func getTerminalSize() -> (rows: Int, cols: Int) {
+public struct TerminalAdapter: TerminalOperations {
+    public func getTerminalSize() -> (rows: Int, cols: Int) {
         Terminal.getTerminalSize()
     }
 
-    func cursorPosition(row: Int, col: Int) -> String {
+    public func cursorPosition(row: Int, col: Int) -> String {
         Terminal.cursorPosition(row: row, col: col)
     }
 
-    var clear: String { Terminal.clear }
-    var home: String { Terminal.home }
-    var eraseDown: String { Terminal.eraseDown }
-    var hideCursor: String { Terminal.hideCursor }
-    var showCursor: String { Terminal.showCursor }
-    var reset: String { Terminal.reset }
-    var bold: String { Terminal.bold }
+    public var clear: String { Terminal.clear }
+    public var home: String { Terminal.home }
+    public var eraseDown: String { Terminal.eraseDown }
+    public var hideCursor: String { Terminal.hideCursor }
+    public var showCursor: String { Terminal.showCursor }
+    public var reset: String { Terminal.reset }
+    public var bold: String { Terminal.bold }
+
+    public init() {}
 }
 
-/// Renders game state to a string for display
-struct GameRenderer {
-    private let terminal: TerminalProtocol
+// MARK: - GameInput Protocol
 
-    /// Creates a renderer with the given terminal adapter
-    /// - Parameter terminal: Terminal protocol for output operations
-    init(terminal: TerminalProtocol = TerminalAdapter()) {
+public protocol GameInput {
+    func start()
+    func stop()
+    func nextKey() -> KeyAction?
+}
+
+public enum KeyAction {
+    case left
+    case right
+    case rotate
+    case drop
+    case pause
+    case quit
+}
+
+// MARK: - ConsoleRenderer
+
+public protocol GameRenderer {
+    func render(state: GameSessionState) -> String
+}
+
+public struct ConsoleRenderer: GameRenderer {
+    private let terminal: TerminalOperations
+
+    public init(terminal: TerminalOperations) {
         self.terminal = terminal
     }
 
-    /// Renders the complete game state to a display string
-    /// - Parameters:
-    ///   - state: The game session state to render
-    ///   - terminalSize: Optional terminal size override
-    /// - Returns: String ready for output to terminal
-    func render(
-        state: GameSessionState,
-        terminalSize: (rows: Int, cols: Int)? = nil
-    ) -> String {
-        let size = terminalSize ?? terminal.getTerminalSize()
+    public func render(state: GameSessionState) -> String {
+        let size = terminal.getTerminalSize()
         let width = state.grid.first?.count ?? 10
         let height = state.grid.count
         let boardWidth = width * 2 + 2
@@ -148,5 +187,85 @@ struct GameRenderer {
         }
 
         return output
+    }
+}
+
+// MARK: - ConsoleInputHandler
+
+public class ConsoleInputHandler: GameInput {
+    private let inputQueue = DispatchQueue(label: "input.queue")
+    private var originalTermios = termios()
+    private var lastKey: KeyAction?
+    private var running = false
+
+    public init() {
+        enableRawMode()
+    }
+
+    deinit {
+        disableRawMode()
+    }
+
+    public func start() {
+        running = true
+        inputQueue.async { [weak self] in
+            guard let self = self else { return }
+            while self.running {
+                var byte: UInt8 = 0
+                let n = read(STDIN_FILENO, &byte, 1)
+                if n == 1 {
+                    self.processByte(byte)
+                }
+                usleep(10000)
+            }
+        }
+    }
+
+    public func stop() {
+        running = false
+    }
+
+    public func nextKey() -> KeyAction? {
+        let key = lastKey
+        lastKey = nil
+        return key
+    }
+
+    private func processByte(_ byte: UInt8) {
+        let scalar = UnicodeScalar(byte)
+        let char = Character(scalar)
+
+        switch char {
+        case "j":
+            lastKey = .left
+        case "l":
+            lastKey = .right
+        case "k":
+            lastKey = .rotate
+        case " ":
+            lastKey = .drop
+        case "\u{1b}":
+            lastKey = .pause
+        case "q":
+            lastKey = .quit
+        default:
+            break
+        }
+    }
+
+    private func enableRawMode() {
+        tcgetattr(STDIN_FILENO, &originalTermios)
+        var raw = originalTermios
+        raw.c_lflag &= ~(UInt(ECHO) | UInt(ICANON) | UInt(ISIG) | UInt(IEXTEN))
+        raw.c_iflag &= ~(UInt(IXON) | UInt(ICRNL) | UInt(BRKINT) | UInt(INPCK) | UInt(ISTRIP))
+        raw.c_oflag &= ~(UInt(OPOST))
+        raw.c_cflag |= UInt(CS8)
+        raw.c_cc.16 = 1  // VMIN
+        raw.c_cc.17 = 0  // VTIME
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &raw)
+    }
+
+    private func disableRawMode() {
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &originalTermios)
     }
 }

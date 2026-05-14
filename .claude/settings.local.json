@@ -6,7 +6,9 @@
       "Edit",
       "Glob",
       "Grep",
-      "Bash"
+      "Bash",
+      "Bash(rm \"/Users/maxik/Google Drive/My Drive/Projects/tetris/.git/index.lock\")",
+      "Bash(git add *)"
     ]
   }
 }

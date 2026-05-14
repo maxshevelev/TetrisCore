@@ -4,7 +4,7 @@ import Foundation
 
 /// Represents the colors of tetromino pieces.
 /// This is a UI-agnostic color definition; renderers convert to display format.
-enum TetrominoColor {
+public enum TetrominoColor {
     case cyan    // I piece
     case yellow  // O piece
     case magenta // T piece
@@ -14,7 +14,7 @@ enum TetrominoColor {
     case orange  // L piece
 
     /// ANSI escape code for console rendering
-    var ansiCode: String {
+    public var ansiCode: String {
         switch self {
         case .cyan:    return "\u{001B}[36m"
         case .yellow:  return "\u{001B}[33m"
