@@ -1,4 +1,4 @@
-// Terminal.swift - Console UI module (Terminal + Renderer + Input)
+// Terminal.swift - Console UI module
 
 import Darwin
 import Foundation
@@ -62,40 +62,23 @@ public struct TerminalAdapter: TerminalOperations {
     public init() {}
 }
 
-// MARK: - GameInput Protocol
-
-public protocol GameInput {
-    func start()
-    func stop()
-    func nextKey() -> KeyAction?
-}
-
-public enum KeyAction {
-    case left
-    case right
-    case rotate
-    case drop
-    case pause
-    case quit
-}
-
 // MARK: - ConsoleRenderer
 
 public protocol GameRenderer {
-    func render(state: GameSessionState) -> String
+    func render(data: GameSessionState) -> String
 }
 
-public struct ConsoleRenderer: GameRenderer {
+public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
     private let terminal: TerminalOperations
 
     public init(terminal: TerminalOperations) {
         self.terminal = terminal
     }
 
-    public func render(state: GameSessionState) -> String {
+    public func render(data: GameSessionState) -> String {
         let size = terminal.getTerminalSize()
-        let width = state.grid.first?.count ?? 10
-        let height = state.grid.count
+        let width = data.grid.first?.count ?? 10
+        let height = data.grid.count
         let boardWidth = width * 2 + 2
         let boardHeight = height + 2
         let padLeft = max(0, (size.cols - boardWidth) / 2)
@@ -103,12 +86,12 @@ public struct ConsoleRenderer: GameRenderer {
         let startRow = padTop + 1
         let startCol = padLeft + 1
         let nextCol = max(1, startCol - 12)
-        let dropInterval = max(0.15, 0.8 - Double(state.level - 1) * 0.06)
+        let dropInterval = max(0.15, 0.8 - Double(data.level - 1) * 0.06)
 
         var output = terminal.home + terminal.eraseDown
 
         // Draw next piece preview
-        if let next = state.nextPiece {
+        if let next = data.nextPiece {
             output += terminal.cursorPosition(row: startRow, col: nextCol)
             output += terminal.bold + "Next:" + terminal.reset
             for y in 0..<4 {
@@ -137,15 +120,13 @@ public struct ConsoleRenderer: GameRenderer {
             output += terminal.cursorPosition(row: startRow + y + 1, col: startCol)
             output += terminal.bold + "║" + terminal.reset
             for x in 0..<width {
-                let currentCell = state.grid[y][x]
+                let currentCell = data.grid[y][x]
                 var color: TetrominoColor?
 
-                // Check if grid cell is filled
                 if currentCell.isFilled {
                     color = currentCell.color
-                } else if let piece = state.currentPiece {
-                    // Check if current piece covers this cell
-                    for (px, py) in piece.getAbsoluteCoordinates(xOffset: state.currentX, yOffset: state.currentY) {
+                } else if let piece = data.currentPiece {
+                    for (px, py) in piece.getAbsoluteCoordinates(xOffset: data.currentX, yOffset: data.currentY) {
                         if px == x && py == y {
                             color = piece.shape.blockColor
                             break
@@ -169,18 +150,30 @@ public struct ConsoleRenderer: GameRenderer {
             return startCol + max(0, (boardWidth - text.count) / 2)
         }
 
-        let scoreText = "Score: \(state.score)  Level: \(state.level)"
+        let scoreText = "Score: \(data.score)  Level: \(data.level)"
         let controlsText = "Controls: j=left  k=rotate  l=right  SPACE=drop  q=quit"
-        let statusText = state.paused ? "PAUSED - Press ESC to resume" : "Drop: \(String(format: "%.2fs", dropInterval))"
+        let statusText: String
+        switch data.state {
+        case .initializing:
+            statusText = "Initializing..."
+        case .dropping:
+            statusText = "Drop: \(String(format: "%.2fs", dropInterval))"
+        case .locking:
+            statusText = "Locking piece..."
+        case .paused:
+            statusText = "PAUSED - Press ESC to resume"
+        case .gameOver:
+            statusText = "GAME OVER - Press q to quit"
+        }
 
         output += terminal.cursorPosition(row: startRow + height + 3, col: centerColumn(for: scoreText))
-        output += "Score: " + terminal.bold + String(state.score) + terminal.reset + "  Level: " + terminal.bold + String(state.level) + terminal.reset
+        output += "Score: " + terminal.bold + String(data.score) + terminal.reset + "  Level: " + terminal.bold + String(data.level) + terminal.reset
 
         output += terminal.cursorPosition(row: startRow + height + 4, col: centerColumn(for: controlsText))
         output += controlsText
 
         output += terminal.cursorPosition(row: startRow + height + 5, col: centerColumn(for: statusText))
-        if state.paused {
+        if data.state == .paused {
             output += terminal.bold + TetrominoColor.red.ansiCode + statusText + terminal.reset
         } else {
             output += statusText
@@ -192,13 +185,18 @@ public struct ConsoleRenderer: GameRenderer {
 
 // MARK: - ConsoleInputHandler
 
-public class ConsoleInputHandler: GameInput {
+class ConsoleInputHandler: @unchecked Sendable {
     private let inputQueue = DispatchQueue(label: "input.queue")
     private var originalTermios = termios()
-    private var lastKey: KeyAction?
     private var running = false
 
-    public init() {
+    private weak var inputReceiver: InputReceiver?
+
+    func setInputReceiver(_ receiver: InputReceiver) {
+        self.inputReceiver = receiver
+    }
+
+    init() {
         enableRawMode()
     }
 
@@ -206,7 +204,7 @@ public class ConsoleInputHandler: GameInput {
         disableRawMode()
     }
 
-    public func start() {
+    func start() {
         running = true
         inputQueue.async { [weak self] in
             guard let self = self else { return }
@@ -221,14 +219,8 @@ public class ConsoleInputHandler: GameInput {
         }
     }
 
-    public func stop() {
+    func stop() {
         running = false
-    }
-
-    public func nextKey() -> KeyAction? {
-        let key = lastKey
-        lastKey = nil
-        return key
     }
 
     private func processByte(_ byte: UInt8) {
@@ -236,20 +228,13 @@ public class ConsoleInputHandler: GameInput {
         let char = Character(scalar)
 
         switch char {
-        case "j":
-            lastKey = .left
-        case "l":
-            lastKey = .right
-        case "k":
-            lastKey = .rotate
-        case " ":
-            lastKey = .drop
-        case "\u{1b}":
-            lastKey = .pause
-        case "q":
-            lastKey = .quit
-        default:
-            break
+        case "j": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.moveLeft) }
+        case "l": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.moveRight) }
+        case "k": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.rotate) }
+        case " ": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.hardDrop) }
+        case "\u{1b}": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.togglePause) }
+        case "q": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.quit) }
+        default: break
         }
     }
 
@@ -267,5 +252,44 @@ public class ConsoleInputHandler: GameInput {
 
     private func disableRawMode() {
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &originalTermios)
+    }
+}
+
+// MARK: - ConsoleGameUI Facade
+
+public final class ConsoleGameUI: @unchecked Sendable {
+    private let controller: GameController
+    private let input: ConsoleInputHandler
+
+    public init() {
+        let renderer = ConsoleRenderer(terminal: TerminalAdapter())
+        self.input = ConsoleInputHandler()
+
+        self.controller = GameController(
+            onRender: { state in
+                let output = renderer.render(data: state)
+                print(output, terminator: "")
+                fflush(stdout)
+            },
+            onGameOver: {
+                print(Terminal.showCursor)
+                fflush(stdout)
+            }
+        )
+
+        input.setInputReceiver(controller)
+    }
+
+    public func run() {
+        print(Terminal.hideCursor)
+        print(Terminal.clear)
+        fflush(stdout)
+
+        input.start()
+        Task.detached { await self.controller.start() }
+
+        // Block until game over
+        controller.doneSemaphore.wait()
+        input.stop()
     }
 }
