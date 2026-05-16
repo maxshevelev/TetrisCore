@@ -254,17 +254,30 @@ public actor GameController: InputReceiver {
     // MARK: - Render
 
     private func render() {
-        let state = GameSessionState(
+        let pieceBlocks: [PieceBlock]
+        if let piece = currentPiece {
+            pieceBlocks = piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY)
+                .map { PieceBlock(x: $0.x, y: $0.y, color: piece.shape.blockColor) }
+        } else {
+            pieceBlocks = []
+        }
+
+        let nextPieceBlocks: [PieceBlock]
+        if let next = nextPiece {
+            nextPieceBlocks = next.getAbsoluteCoordinates(xOffset: 0, yOffset: 0)
+                .map { PieceBlock(x: $0.x, y: $0.y, color: next.shape.blockColor) }
+        } else {
+            nextPieceBlocks = []
+        }
+
+        onRender(GameSessionState(
             grid: grid,
-            currentPiece: currentPiece,
-            currentX: currentX,
-            currentY: currentY,
-            nextPiece: nextPiece,
+            pieceBlocks: pieceBlocks,
+            nextPieceBlocks: nextPieceBlocks,
             score: score,
             level: level,
             state: state
-        )
-        onRender(state)
+        ))
     }
 
     private func finish() {

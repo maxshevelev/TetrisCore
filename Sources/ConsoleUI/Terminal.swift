@@ -91,21 +91,14 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         var output = terminal.home + terminal.eraseDown
 
         // Draw next piece preview
-        if let next = data.nextPiece {
+        if !data.nextPieceBlocks.isEmpty {
             output += terminal.cursorPosition(row: startRow, col: nextCol)
             output += terminal.bold + "Next:" + terminal.reset
             for y in 0..<4 {
                 output += terminal.cursorPosition(row: startRow + y + 1, col: nextCol)
                 for x in 0..<4 {
-                    var hasBlock = false
-                    for (px, py) in next.getAbsoluteCoordinates(xOffset: 0, yOffset: 0) {
-                        if px == x && py == y {
-                            hasBlock = true
-                            break
-                        }
-                    }
-                    if hasBlock {
-                        output += next.shape.blockColor.ansiCode + "██" + terminal.reset
+                    if let block = data.nextPieceBlocks.first(where: { $0.x == x && $0.y == y }) {
+                        output += block.color.ansiCode + "██" + terminal.reset
                     } else {
                         output += "  "
                     }
@@ -125,13 +118,8 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
 
                 if currentCell.isFilled {
                     color = currentCell.color
-                } else if let piece = data.currentPiece {
-                    for (px, py) in piece.getAbsoluteCoordinates(xOffset: data.currentX, yOffset: data.currentY) {
-                        if px == x && py == y {
-                            color = piece.shape.blockColor
-                            break
-                        }
-                    }
+                } else if let block = data.pieceBlocks.first(where: { $0.x == x && $0.y == y }) {
+                    color = block.color
                 }
 
                 if let color = color {
