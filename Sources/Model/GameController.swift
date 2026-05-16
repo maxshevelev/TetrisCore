@@ -82,7 +82,7 @@ public actor GameController: InputReceiver {
     private var dropTimer: Task<Void, Never>?
     private var lockTimer: Task<Void, Never>?
 
-    func createDropTimer(interval: TimeInterval) -> Task<Void, Never> {
+    private func createDropTimer(interval: TimeInterval) -> Task<Void, Never> {
         Task {
             try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             guard state == .dropping else { return }
@@ -96,17 +96,17 @@ public actor GameController: InputReceiver {
         }
     }
 
-    func makeDropTimer() {
+    private func makeDropTimer() {
         dropTimer?.cancel()
         dropTimer = createDropTimer(interval: dropInterval)
     }
 
-    func stopDropTimer() {
+    private func stopDropTimer() {
         dropTimer?.cancel()
         dropTimer = nil
     }
 
-    func createLockTimer(interval: TimeInterval) -> Task<Void, Never> {
+    private func createLockTimer(interval: TimeInterval) -> Task<Void, Never> {
         Task {
             try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             guard state == .locking else { return }
@@ -120,12 +120,12 @@ public actor GameController: InputReceiver {
         }
     }
 
-    func stopLockTimer() {
+    private func stopLockTimer() {
         lockTimer?.cancel()
         lockTimer = nil
     }
 
-    func makeLockTimer() {
+    private func makeLockTimer() {
         lockTimer?.cancel()
         lockTimer = createLockTimer(interval: lockDelay)
     }
@@ -224,7 +224,6 @@ public actor GameController: InputReceiver {
                 linesToClear.append(y)
             }
         }
-        guard !linesToClear.isEmpty else { return }
         for y in linesToClear.sorted(by: >) {
             grid.remove(at: y)
             grid.insert(Array(repeating: .empty, count: width), at: 0)

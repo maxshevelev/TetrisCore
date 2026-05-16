@@ -209,6 +209,12 @@ class ConsoleInputHandler: @unchecked Sendable {
 
     func stop() {
         running = false
+        // Wait for input queue to finish processing
+        inputQueue.sync {}
+    }
+
+    func cleanup() {
+        disableRawMode()
     }
 
     private func processByte(_ byte: UInt8) {
@@ -247,7 +253,7 @@ class ConsoleInputHandler: @unchecked Sendable {
 
 public final class ConsoleGameUI: @unchecked Sendable {
     private let controller: GameController
-    private let input: ConsoleInputHandler
+    private var input: ConsoleInputHandler?
 
     public init() {
         let renderer = ConsoleRenderer(terminal: TerminalAdapter())
@@ -265,7 +271,7 @@ public final class ConsoleGameUI: @unchecked Sendable {
             }
         )
 
-        input.setInputReceiver(controller)
+        input?.setInputReceiver(controller)
     }
 
     public func run() {
@@ -273,11 +279,17 @@ public final class ConsoleGameUI: @unchecked Sendable {
         print(Terminal.clear)
         fflush(stdout)
 
-        input.start()
+        input?.start()
         Task.detached { await self.controller.start() }
 
         // Block until game over
         controller.doneSemaphore.wait()
-        input.stop()
+        input?.stop()
+        input?.cleanup()
+        input = nil
+
+        print(Terminal.showCursor)
+        print("")  // Add newline so prompt appears on fresh line
+        fflush(stdout)
     }
 }
