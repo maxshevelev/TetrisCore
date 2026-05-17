@@ -86,7 +86,7 @@ public actor GameController: InputReceiver {
         Task {
             try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             guard state == .dropping else { return }
-            if canMoveDown() {
+            if canMoveDownPrivate() {
                 currentY += 1
                 state = .dropping
             } else {
@@ -110,9 +110,9 @@ public actor GameController: InputReceiver {
         Task {
             try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
             guard state == .locking else { return }
-            if !canMoveDown() {
-                lockPiece()
-                clearLines()
+            if !canMoveDownPrivate() {
+                lockPiecePrivate()
+                clearLinesPrivate()
                 spawnNewPiece()
             }
             state = .dropping
@@ -153,28 +153,16 @@ public actor GameController: InputReceiver {
                 switch keyEvent {
                 case .moveLeft:
                     guard isPlaying else { continue }
-                    currentX -= 1
-                    if isColliding() {
-                        currentX += 1
-                    }
+                    moveLeft()
                 case .moveRight:
                     guard isPlaying else { continue }
-                    currentX += 1
-                    if isColliding() {
-                        currentX -= 1
-                    }
+                    moveRight()
                 case .rotate:
                     guard isPlaying else { continue }
-                    guard let piece = currentPiece else { continue }
-                    piece.rotate()
-                    if isColliding() {
-                        piece.rotateBack()
-                        continue
-                    }
+                    rotatePiece()
                 case .hardDrop:
                     guard isPlaying else { continue }
-                    while canMoveDown() { currentY += 1 }
-                    state = .locking
+                    hardDropPiece()
                 case .togglePause:
                     if isPlaying {
                         state = .paused
@@ -189,16 +177,51 @@ public actor GameController: InputReceiver {
         }
     }
 
-    // MARK: - Game Logic
+    // MARK: - Testable Game Logic Methods
 
-    private func canMoveDown() -> Bool {
+    public func moveLeft() {
+        guard isPlaying else { return }
+        currentX -= 1
+        if isColliding() {
+            currentX += 1
+        }
+    }
+
+    public func moveRight() {
+        guard isPlaying else { return }
+        currentX += 1
+        if isColliding() {
+            currentX -= 1
+        }
+    }
+
+    public func rotatePiece() {
+        guard isPlaying else { return }
+        guard let piece = currentPiece else { return }
+        piece.rotate()
+        if isColliding() {
+            piece.rotateBack()
+        }
+    }
+
+    public func hardDropPiece() {
+        guard isPlaying else { return }
+        while canMoveDownPrivate() { currentY += 1 }
+        state = .locking
+    }
+
+    private func canMoveDownPrivate() -> Bool {
         currentY += 1
-        let colliding = isColliding()
+        let colliding = isCollidingPrivate()
         currentY -= 1
         return !colliding
     }
 
-    private func isColliding() -> Bool {
+    public func isColliding() -> Bool {
+        isCollidingPrivate()
+    }
+
+    private func isCollidingPrivate() -> Bool {
         guard let piece = currentPiece else { return false }
         for (x, y) in piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY) {
             if x < 0 || x >= width || y >= height { return true }
@@ -207,7 +230,7 @@ public actor GameController: InputReceiver {
         return false
     }
 
-    private func lockPiece() {
+    private func lockPiecePrivate() {
         guard let piece = currentPiece else { return }
         for (x, y) in piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY) {
             if y >= 0 && x >= 0 && x < width && y < height {
@@ -217,7 +240,7 @@ public actor GameController: InputReceiver {
         currentPiece = nil
     }
 
-    private func clearLines() {
+    private func clearLinesPrivate() {
         var linesToClear: [Int] = []
         for y in 0..<height {
             if grid[y].allSatisfy({ $0.isFilled }) {
