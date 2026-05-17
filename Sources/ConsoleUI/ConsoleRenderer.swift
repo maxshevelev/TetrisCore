@@ -93,18 +93,75 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             statusText = "Game Over! ESC - exit, SPACE - new game"
         }
 
-        output += terminal.cursorPosition(row: startRow + height + 3, col: centerColumn(for: scoreText))
-        output += "Score: " + terminal.bold + String(data.score) + terminal.reset + "  Level: " + terminal.bold + String(data.level) + terminal.reset
-
-        output += terminal.cursorPosition(row: startRow + height + 4, col: centerColumn(for: controlsText))
-        output += controlsText
-
-        output += terminal.cursorPosition(row: startRow + height + 5, col: centerColumn(for: statusText))
-        if data.state == .paused || data.state == .gameOver {
-            output += terminal.bold + TetrominoColor.red.ansiCode + statusText + terminal.reset
+        if data.state == .gameOver {
+            let overlay = renderGameOverOverlay(score: data.score, level: data.level, startRow: startRow, startCol: startCol, width: width, height: height)
+            output += overlay
         } else {
-            output += statusText
+            output += terminal.cursorPosition(row: startRow + height + 3, col: centerColumn(for: scoreText))
+            output += "Score: " + terminal.bold + String(data.score) + terminal.reset + "  Level: " + terminal.bold + String(data.level) + terminal.reset
+
+            output += terminal.cursorPosition(row: startRow + height + 4, col: centerColumn(for: controlsText))
+            output += controlsText
+
+            output += terminal.cursorPosition(row: startRow + height + 5, col: centerColumn(for: statusText))
+            if data.state == .paused {
+                output += terminal.bold + TetrominoColor.red.ansiCode + statusText + terminal.reset
+            } else {
+                output += statusText
+            }
         }
+
+        return output
+    }
+
+    private func renderGameOverOverlay(
+        score: Int,
+        level: Int,
+        startRow: Int,
+        startCol: Int,
+        width: Int,
+        height: Int
+    ) -> String {
+        let boardWidth = width * 2 + 2
+        let overlayWidth = 28
+        let overlayHeight = 9
+        let overlayStartRow = startRow + max(0, (height - overlayHeight) / 2)
+        let overlayStartCol = startCol + max(0, (boardWidth - overlayWidth) / 2)
+
+        let topBorder = String(repeating: "═", count: overlayWidth)
+        let scoreText = String(format: "Score: %d", score)
+        let levelText = String(format: "Level: %d", level)
+
+        let lines: [(text: String, isHighlighted: Bool)] = [
+            ("GAME OVER", true),
+            (scoreText, false),
+            (levelText, false),
+            ("", false),
+            ("Press SPACE for new game", false),
+            ("Press ESC to exit", false),
+        ]
+
+        var output = ""
+        // Top border
+        output += terminal.cursorPosition(row: overlayStartRow, col: overlayStartCol)
+        output += terminal.bold + "╔" + topBorder + "╗" + terminal.reset
+
+        // Content lines
+        for (index, line) in lines.enumerated() {
+            let row = overlayStartRow + index + 1
+            output += terminal.cursorPosition(row: row, col: overlayStartCol)
+            output += terminal.bold + "║" + terminal.reset
+            if line.isHighlighted {
+                output += TetrominoColor.red.ansiCode + terminal.bold + line.text + String(repeating: " ", count: max(0, overlayWidth - line.text.count)) + terminal.reset
+            } else {
+                output += line.text + String(repeating: " ", count: max(0, overlayWidth - line.text.count))
+            }
+            output += terminal.bold + "║" + terminal.reset
+        }
+
+        // Bottom border
+        output += terminal.cursorPosition(row: overlayStartRow + lines.count + 1, col: overlayStartCol)
+        output += terminal.bold + "╚" + topBorder + "╝" + terminal.reset
 
         return output
     }
