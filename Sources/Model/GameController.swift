@@ -224,7 +224,7 @@ public actor GameController: InputReceiver {
                 linesToClear.append(y)
             }
         }
-        for y in linesToClear.sorted(by: >) {
+        for y in linesToClear.sorted() {
             grid.remove(at: y)
             grid.insert(Array(repeating: .empty, count: width), at: 0)
             score += 100

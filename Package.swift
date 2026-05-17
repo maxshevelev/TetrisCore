@@ -23,5 +23,10 @@ let package = Package(
             name: "tetris",
             dependencies: ["Model", "ConsoleUI"]
         ),
+        // Tests
+        .testTarget(
+            name: "ModelTests",
+            dependencies: ["Model"]
+        ),
     ]
 )
