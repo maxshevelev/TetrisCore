@@ -132,13 +132,8 @@ public actor GameController: InputReceiver {
 
     public func start() {
         render()
+        startInputListener()
         state = .dropping
-    }
-
-    public func resetAndStart() {
-        resetGame()
-        state = .dropping
-        render()
     }
 
     private func resetGame() {
@@ -157,6 +152,7 @@ public actor GameController: InputReceiver {
         resetGame()
         state = .dropping
         render()
+        startInputListener()
     }
 
     // MARK: - Input Receiver

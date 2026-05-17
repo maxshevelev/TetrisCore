@@ -300,7 +300,7 @@ public final class ConsoleGameUI: @unchecked Sendable {
 
         repeat {
             // Start/restart the game
-            await gameController.resetAndStart()
+            await gameController.restart()
 
             // Wait for game over using semaphore
             await withUnsafeContinuation { (continuation: UnsafeContinuation<Void, Never>) in
