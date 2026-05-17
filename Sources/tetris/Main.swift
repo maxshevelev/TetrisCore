@@ -4,8 +4,8 @@ import ConsoleUI
 
 @main
 struct Tetris {
-    static func main() {
+    static func main() async {
         let ui = ConsoleGameUI()
-        ui.run()
+        await ui.run()
     }
 }

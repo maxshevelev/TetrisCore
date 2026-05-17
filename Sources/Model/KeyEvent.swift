@@ -5,6 +5,6 @@ public enum KeyEvent: Sendable {
     case moveRight
     case rotate
     case hardDrop
-    case togglePause
+    case esc
     case quit
 }

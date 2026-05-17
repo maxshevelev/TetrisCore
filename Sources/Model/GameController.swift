@@ -27,7 +27,6 @@ public actor GameController: InputReceiver {
             case .gameOver:
                 stopDropTimer()
                 stopLockTimer()
-                finish()
             default: break
             }
         }
@@ -48,16 +47,14 @@ public actor GameController: InputReceiver {
     // MARK: - Callbacks
 
     private let onRender: @Sendable (GameSessionState) -> Void
-    private let onGameOver: @Sendable () -> Void
-
-    public nonisolated let doneSemaphore = DispatchSemaphore(value: 0)
+    private let onGameFinished: @Sendable () -> Void
 
     public init(
         onRender: @escaping @Sendable (GameSessionState) -> Void,
-        onGameOver: @escaping @Sendable () -> Void
+        onGameFinished: @escaping @Sendable () -> Void
     ) {
         self.onRender = onRender
-        self.onGameOver = onGameOver
+        self.onGameFinished = onGameFinished
         self.grid = Array(repeating: Array(repeating: .empty, count: width), count: height)
         let shapes: [TetrominoShape] = [.I, .O, .T, .S, .Z, .J, .L]
         self.nextPiece = Tetromino(shape: shapes.randomElement()!)
@@ -148,11 +145,10 @@ public actor GameController: InputReceiver {
         linesCleared = 0
     }
 
-    public func restart() {
+    private func restart() {
         resetGame()
         state = .dropping
         render()
-        startInputListener()
     }
 
     // MARK: - Input Receiver
@@ -173,7 +169,7 @@ public actor GameController: InputReceiver {
         case .moveRight: return "right"
         case .rotate: return "rotate"
         case .hardDrop: return "drop"
-        case .togglePause: return "pause"
+        case .esc: return "esc"
         case .quit: return "q"
         }
     }
@@ -182,17 +178,6 @@ public actor GameController: InputReceiver {
         Task {
             while true {
                 let keyEvent = await self.inputBuffer.receive()
-
-                // Handle game over menu input
-                if state == .gameOver {
-                    switch keyEvent {
-                    case .quit:
-                        finish()
-                        // Don't return - keep listening for restart
-                    default:
-                        continue
-                    }
-                }
 
                 switch keyEvent {
                 case .moveLeft:
@@ -205,13 +190,23 @@ public actor GameController: InputReceiver {
                     guard isPlaying else { continue }
                     rotatePiece()
                 case .hardDrop:
-                    guard isPlaying else { continue }
-                    hardDropPiece()
-                case .togglePause:
+                    if isPlaying {
+                        hardDropPiece()
+                    } else if state == .gameOver {
+                        restart()
+                    } else {
+                        continue
+                    }
+                case .esc:
                     if isPlaying {
                         state = .paused
                     } else if state == .paused {
                         state = .dropping
+                    } else if state == .gameOver {
+                        finish()
+                        return // and finish the input listener task
+                    } else {
+                        continue
                     }
                 case .quit:
                     state = .gameOver
@@ -336,19 +331,19 @@ public actor GameController: InputReceiver {
             nextPieceBlocks = []
         }
 
-        onRender(GameSessionState(
-            grid: grid,
-            pieceBlocks: pieceBlocks,
-            nextPieceBlocks: nextPieceBlocks,
-            score: score,
-            level: level,
-            state: state
-        ))
+        onRender(
+            GameSessionState(
+                grid: grid,
+                pieceBlocks: pieceBlocks,
+                nextPieceBlocks: nextPieceBlocks,
+                score: score,
+                level: level,
+                state: state
+            ))
     }
 
     private func finish() {
         render()
-        onGameOver()
-        doneSemaphore.signal()
+        onGameFinished()
     }
 }
