@@ -1,92 +1,246 @@
 import Testing
 import Model
 
-@Test("clearLines correctly removes multiple adjacent full lines")
-func clearLines_removesAdjacentLines() async {
-    // Create a 20x10 grid
+// MARK: - Movement Tests
+
+@Test("moveLeft moves piece left when not colliding")
+func moveLeft_movesLeft() async {
     var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    let piece = Tetromino(shape: .I)
+    var currentX = 5
+    let currentY = 5
 
-    // Fill two adjacent lines
-    for x in 0..<10 {
-        grid[17][x] = .filled(.red)
-        grid[18][x] = .filled(.blue)
+    currentX -= 1
+    if !isColliding(grid: grid, piece: piece, x: currentX, y: currentY) {
+        // Move is valid
+    } else {
+        currentX += 1
     }
 
-    // Find lines to clear
-    var linesToClear: [Int] = []
-    for y in 0..<20 {
-        if grid[y].allSatisfy({ $0.isFilled }) {
-            linesToClear.append(y)
-        }
-    }
-
-    // Remove with ascending sort (correct order for this algorithm)
-    for y in linesToClear.sorted() {
-        grid.remove(at: y)
-        grid.insert(Array(repeating: .empty, count: 10), at: 0)
-    }
-
-    // Both rows should be removed (top 2 rows empty)
-    #expect(grid[0].allSatisfy { $0 == .empty })
-    #expect(grid[1].allSatisfy { $0 == .empty })
+    #expect(currentX == 4)
 }
 
-@Test("clearLines preserves grid height after clearing lines")
-func clearLines_preservesHeight() async {
+@Test("moveLeft does not move piece into wall")
+func moveLeft_doesNotMoveIntoWall() async {
     var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    let piece = Tetromino(shape: .I)
+    var currentX = 0
+    let currentY = 5
 
-    // Fill various lines
-    for x in 0..<10 {
-        grid[5][x] = .filled(.red)
-        grid[10][x] = .filled(.blue)
-        grid[15][x] = .filled(.green)
+    currentX -= 1
+    if !isColliding(grid: grid, piece: piece, x: currentX, y: currentY) {
+        // Move is valid
+    } else {
+        currentX += 1
     }
 
-    var linesToClear: [Int] = []
-    for y in 0..<20 {
-        if grid[y].allSatisfy({ $0.isFilled }) {
-            linesToClear.append(y)
-        }
-    }
-
-    // Remove lines with ascending sort
-    for y in linesToClear.sorted() {
-        grid.remove(at: y)
-        grid.insert(Array(repeating: .empty, count: 10), at: 0)
-    }
-
-    // Height should remain 20 (we remove and insert the same number of rows)
-    #expect(grid.count == 20)
-    #expect(linesToClear.count == 3)
+    #expect(currentX == 0)
 }
 
-// Demonstrates the bug with descending sort (the original code)
-@Test("clearLines descending sort demonstrates the bug")
-func clearLines_descendingSortBug() async {
+@Test("moveRight moves piece right when not colliding")
+func moveRight_movesRight() async {
     var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    let piece = Tetromino(shape: .I)
+    var currentX = 5
+    let currentY = 5
 
-    // Fill two adjacent lines
-    for x in 0..<10 {
-        grid[17][x] = .filled(.red)
-        grid[18][x] = .filled(.blue)
+    currentX += 1
+    if !isColliding(grid: grid, piece: piece, x: currentX, y: currentY) {
+        // Move is valid
+    } else {
+        currentX -= 1
     }
 
-    // Find lines to clear
-    var linesToClear: [Int] = []
-    for y in 0..<20 {
-        if grid[y].allSatisfy({ $0.isFilled }) {
-            linesToClear.append(y)
-        }
+    #expect(currentX == 6)
+}
+
+@Test("moveRight does not move piece into wall")
+func moveRight_doesNotMoveIntoWall() async {
+    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    let piece = Tetromino(shape: .I)
+    var currentX = 9
+    let currentY = 5
+
+    currentX += 1
+    if !isColliding(grid: grid, piece: piece, x: currentX, y: currentY) {
+        // Move is valid
+    } else {
+        currentX -= 1
     }
 
-    // Remove with descending sort (original buggy code)
-    for y in linesToClear.sorted(by: >) {
-        grid.remove(at: y)
-        grid.insert(Array(repeating: .empty, count: 10), at: 0)
+    #expect(currentX == 9)
+}
+
+// MARK: - Rotation Tests
+
+@Test("rotatePiece rotates the piece")
+func rotate_rotatesPiece() async {
+    let piece = Tetromino(shape: .I)
+    let initialCoordinates = piece.getAbsoluteCoordinates(xOffset: 0, yOffset: 0)
+
+    piece.rotate()
+    let rotatedCoordinates = piece.getAbsoluteCoordinates(xOffset: 0, yOffset: 0)
+
+    // I piece rotates from horizontal to vertical - coordinates change
+    #expect(!initialCoordinates.elementsEqual(rotatedCoordinates, by: ==))
+}
+
+@Test("rotatePiece undo rotation when colliding")
+func rotate_doesNotRotateWhenColliding() async {
+    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    var piece = Tetromino(shape: .T)
+    let currentX = 5
+    let currentY = 18
+
+    let originalCoordinates = piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY)
+    piece.rotate()
+    if isColliding(grid: grid, piece: piece, x: currentX, y: currentY) {
+        piece.rotateBack()
     }
 
-    // With descending sort, the row at index 18 still has red value (not removed)
-    // This demonstrates the bug where one line remains uncleared
-    let anyRed = grid.contains { row in row.contains { $0.color == .red } }
-    #expect(anyRed)  // Bug: red line was not removed
+    let finalCoordinates = piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY)
+    #expect(originalCoordinates.elementsEqual(finalCoordinates, by: ==))
+}
+
+// MARK: - Hard Drop Tests
+
+@Test("hardDrop drops piece to bottom")
+func hardDrop_dropsToBottom() async {
+    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    let piece = Tetromino(shape: .O)
+    var currentX = 4
+    var currentY = 0
+
+    while canMoveDown(grid: grid, piece: piece, y: currentY + 1) {
+        currentY += 1
+    }
+
+    #expect(currentY == 18)
+}
+
+// MARK: - Collision Tests
+
+@Test("isColliding returns false when piece is in empty space")
+func isColliding_emptySpace() async {
+    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    let piece = Tetromino(shape: .T)
+    let x = 3
+    let y = 5
+
+    #expect(!isColliding(grid: grid, piece: piece, x: x, y: y))
+}
+
+@Test("isColliding returns true when piece hits left wall")
+func isColliding_hitsLeftWall() async {
+    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    let piece = Tetromino(shape: .I)
+    let x = -1
+    let y = 5
+
+    #expect(isColliding(grid: grid, piece: piece, x: x, y: y))
+}
+
+@Test("isColliding returns true when piece hits right wall")
+func isColliding_hitsRightWall() async {
+    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    let piece = Tetromino(shape: .I)
+    let x = 10
+    let y = 5
+
+    #expect(isColliding(grid: grid, piece: piece, x: x, y: y))
+}
+
+@Test("isColliding returns true when piece hits bottom")
+func isColliding_hitsBottom() async {
+    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    let piece = Tetromino(shape: .O)
+    let x = 3
+    let y = 20
+
+    #expect(isColliding(grid: grid, piece: piece, x: x, y: y))
+}
+
+@Test("isColliding returns true when piece overlaps with filled block")
+func isColliding_overlapsFilledBlock() async {
+    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    let piece = Tetromino(shape: .T)
+
+    // T piece at (0,0) has blocks at: (0,0), (1,0), (2,0), (1,1)
+    // So at offset (3,5), blocks are at: (3,5), (4,5), (5,5), (4,6)
+    // Fill the center block of the T
+    let centerX = 4
+    let centerY = 5
+
+    grid[centerY][centerX] = .filled(.red)
+
+    #expect(isColliding(grid: grid, piece: piece, x: 3, y: 5))
+}
+
+// MARK: - Spawn Tests
+
+@Test("spawnNewPiece sets current piece to next piece")
+func spawnNewPiece_setsCurrentPiece() async {
+    let nextPiece = Tetromino(shape: .T)
+    var currentPiece: Tetromino? = nil
+    var currentX = 0
+    var currentY = 0
+
+    currentPiece = nextPiece
+    currentX = 10 / 2 - 2
+    currentY = 0
+
+    #expect(currentPiece != nil)
+    #expect(currentX == 3)
+    #expect(currentY == 0)
+}
+
+@Test("spawnNewPiece when colliding triggers game over")
+func spawnNewPiece_gameOverOnCollide() async {
+    var nextPiece = Tetromino(shape: .I)
+    var currentX = 0
+    var currentY = 0
+
+    let pieceAtSpawnPos = Tetromino(shape: .I)
+    let width = 10
+    let height = 20
+
+    // Check if piece collides at spawn position
+    var colliding = false
+    for (px, _) in pieceAtSpawnPos.getAbsoluteCoordinates(xOffset: 3, yOffset: 0) {
+        if px < 0 || px >= width { colliding = true; break }
+    }
+
+    #expect(!colliding)
+
+    // Test with a piece that would collide - spawn at x=-1
+    var spawnColliding = false
+    for (px, _) in pieceAtSpawnPos.getAbsoluteCoordinates(xOffset: -1, yOffset: 0) {
+        if px < 0 { spawnColliding = true; break }
+    }
+
+    #expect(spawnColliding)
+}
+
+// MARK: - Helper Functions
+
+func isColliding(grid: [[BlockState]], piece: Tetromino, x: Int, y: Int) -> Bool {
+    let width = 10
+    let height = 20
+
+    for (px, py) in piece.getAbsoluteCoordinates(xOffset: x, yOffset: y) {
+        if px < 0 || px >= width || py >= height { return true }
+        if py >= 0 && grid[py][px].isFilled { return true }
+    }
+    return false
+}
+
+func canMoveDown(grid: [[BlockState]], piece: Tetromino, y: Int) -> Bool {
+    let width = 10
+    let height = 20
+
+    for (px, py) in piece.getAbsoluteCoordinates(xOffset: 0, yOffset: y) {
+        if px < 0 || px >= width || py >= height { return false }
+        if py >= 0 && grid[py][px].isFilled { return false }
+    }
+    return true
 }

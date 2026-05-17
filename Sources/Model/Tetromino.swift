@@ -65,7 +65,7 @@ public class Tetromino {
     public let shape: TetrominoShape
     private var _rotationIndex = 0
 
-    init(shape: TetrominoShape) {
+    public init(shape: TetrominoShape) {
         self.shape = shape
     }
 
@@ -83,15 +83,15 @@ public class Tetromino {
         }
     }
 
-    func rotate() {
+    public func rotate() {
         _rotationIndex -= 1
     }
 
-    func rotateBack() {
+    public func rotateBack() {
         _rotationIndex += 1
     }
 
-    func clone() -> Tetromino {
+    public func clone() -> Tetromino {
         let clone = Tetromino(shape: shape)
         clone._rotationIndex = _rotationIndex
         return clone
