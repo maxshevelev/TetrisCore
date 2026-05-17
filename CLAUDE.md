@@ -17,19 +17,23 @@ The tetris game is structured as a Swift Package with a single `tetris` target, 
   - **BlockState.swift** - Abstract block states (`empty`, `filled(TetrominoColor)`) for UI-independent grid representation
   - **TetrominoColor.swift** - Color enum for tetromino pieces with `ansiCode` property for terminal rendering
   - **Tetromino.swift** - Tetromino shape definitions (I, O, T, S, Z, J, L) with rotation states and block coordinates
-  - **TetrisGame.swift** - Core game logic: grid management, collision detection, piece spawning, line clearing, scoring
+  - **GameController.swift** - Event-driven actor managing game state, timing, and input handling
 
-- **Sources/UI/** - UI-specific implementations
-  - **Main.swift** - Entry point with game loop, input handling, and rendering coordination
+- **Sources/ConsoleUI/** - Console-based UI implementation
   - **Terminal.swift** - Terminal control utilities (clear screen, cursor visibility, ANSI colors, terminal size detection)
-  - **InputHandler.swift** - Non-blocking stdin reader using dispatch queue and raw terminal mode
-  - **GameRenderer.swift** - Renders game state to ANSI escape sequences for terminal display
+  - **TerminalAdapter.swift** - Adapter pattern for terminal operations (extracted for testability)
+  - **ConsoleRenderer.swift** - Renders game state to ANSI escape sequences for terminal display
+  - **ConsoleInputHandler.swift** - Non-blocking stdin reader using dispatch queue and raw terminal mode
+  - **ConsoleGameUI.swift** - Facade integrating controller, renderer, and input handler
 
 ## Key Design Decisions
 
 1. **No external dependencies** - Uses Darwin for terminal I/O (tcgetattr/tcsetattr, ioctl)
-2. **Serial input queue** - Input reading runs on a dedicated serial queue; `lastChar` is accessed via queue synchronization
-3. **Ansi escape sequences** - Terminal rendering uses escape codes for cursor positioning and colors
-4. **Grid-based rendering** - Board renders to virtual coordinates then centers based on actual terminal size
-5. **Soft drop with lock delay** - Pieces automatically drop; after user movement, pieces lock after 0.5s of no movement
-6. **UI-agnostic game logic** - `TetrisGame` contains pure game state (grid, pieces, score) and logic (move, rotate, collide, lock, clear). The `GameRenderer` receives game state as parameters and returns a render string. This enables attaching different UI layers (console, graphics, web) to the same game logic.
+2. **Serial input queue** - Input reading runs on a dedicated serial queue; input is sent to actor via `enqueue()`
+3. **Event-driven architecture** - `GameController` is an actor that receives events via `InputReceiver` protocol
+4. **Ansi escape sequences** - Terminal rendering uses escape codes for cursor positioning and colors
+5. **Grid-based rendering** - Board renders to virtual coordinates then centers based on actual terminal size
+6. **Soft drop with lock delay** - Pieces automatically drop; after user movement, pieces lock after 0.5s of no movement
+7. **Testable game logic** - Game logic extracted into public methods (`moveLeft`, `moveRight`, `rotatePiece`, `hardDropPiece`, `isColliding`) and private helpers with `Private` suffix for unit testing
+8. **Terminal state restoration** - Explicit `cleanup()` call in `ConsoleGameUI.run()` ensures terminal mode is restored on exit
+9. **Line clearing order** - Lines cleared in ascending order to avoid index shifting issues when removing multiple adjacent lines
