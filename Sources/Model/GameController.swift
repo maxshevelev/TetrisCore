@@ -132,8 +132,31 @@ public actor GameController: InputReceiver {
 
     public func start() {
         render()
-        startInputListener()
         state = .dropping
+    }
+
+    public func resetAndStart() {
+        resetGame()
+        state = .dropping
+        render()
+    }
+
+    private func resetGame() {
+        grid = Array(repeating: Array(repeating: .empty, count: width), count: height)
+        let shapes: [TetrominoShape] = [.I, .O, .T, .S, .Z, .J, .L]
+        nextPiece = Tetromino(shape: shapes.randomElement()!)
+        currentPiece = nextPiece
+        currentX = width / 2 - 2
+        currentY = 0
+        nextPiece = Tetromino(shape: shapes.randomElement()!)
+        score = 0
+        linesCleared = 0
+    }
+
+    public func restart() {
+        resetGame()
+        state = .dropping
+        render()
     }
 
     // MARK: - Input Receiver
@@ -146,10 +169,35 @@ public actor GameController: InputReceiver {
         (state == .dropping || state == .locking)
     }
 
+    public func awaitInput() async -> String {
+        let keyEvent = await inputBuffer.receive()
+        // Convert key event to string representation
+        switch keyEvent {
+        case .moveLeft: return "left"
+        case .moveRight: return "right"
+        case .rotate: return "rotate"
+        case .hardDrop: return "drop"
+        case .togglePause: return "pause"
+        case .quit: return "q"
+        }
+    }
+
     private func startInputListener() {
         Task {
-            while state != .gameOver {
+            while true {
                 let keyEvent = await self.inputBuffer.receive()
+
+                // Handle game over menu input
+                if state == .gameOver {
+                    switch keyEvent {
+                    case .quit:
+                        finish()
+                        // Don't return - keep listening for restart
+                    default:
+                        continue
+                    }
+                }
+
                 switch keyEvent {
                 case .moveLeft:
                     guard isPlaying else { continue }

@@ -252,7 +252,7 @@ class ConsoleInputHandler: @unchecked Sendable {
 // MARK: - ConsoleGameUI Facade
 
 public final class ConsoleGameUI: @unchecked Sendable {
-    private let controller: GameController
+    private var controller: GameController!
     private var input: ConsoleInputHandler?
 
     public init() {
@@ -280,16 +280,58 @@ public final class ConsoleGameUI: @unchecked Sendable {
         fflush(stdout)
 
         input?.start()
-        Task.detached { await self.controller.start() }
+        Task.detached { [weak self] in
+            guard let self = self else { return }
+            await self.runGameLoop()
+        }
+    }
 
-        // Block until game over
-        controller.doneSemaphore.wait()
+    private func runGameLoop() async {
+        let renderer = ConsoleRenderer(terminal: TerminalAdapter())
+        let gameController = GameController(
+            onRender: { state in
+                let output = renderer.render(data: state)
+                print(output, terminator: "")
+                fflush(stdout)
+            },
+            onGameOver: {}
+        )
+        input?.setInputReceiver(gameController)
+
+        repeat {
+            // Start/restart the game
+            await gameController.resetAndStart()
+
+            // Wait for game over using semaphore
+            await withUnsafeContinuation { (continuation: UnsafeContinuation<Void, Never>) in
+                DispatchQueue.global().async {
+                    gameController.doneSemaphore.wait()
+                    continuation.resume()
+                }
+            }
+
+            // Display game over message
+            print(Terminal.showCursor)
+            print("")
+            print("Game Over! Press 'q' to quit or any other key to restart.")
+            fflush(stdout)
+
+            // Wait for quit/restart command from input handler
+            let key = await gameController.awaitInput()
+
+            // If 'q', exit; otherwise restart the game loop
+            if key == "q" {
+                break
+            }
+
+        } while true
+
+        // Final cleanup
         input?.stop()
         input?.cleanup()
         input = nil
-
+        print(Terminal.clear)
         print(Terminal.showCursor)
-        print("")  // Add newline so prompt appears on fresh line
         fflush(stdout)
     }
 }
