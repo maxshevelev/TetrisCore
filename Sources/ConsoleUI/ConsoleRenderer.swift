@@ -122,17 +122,12 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         width: Int,
         height: Int
     ) -> String {
-        let boardWidth = width * 2 + 2
-        let overlayWidth = 28
-        let overlayHeight = 9
-        let overlayStartRow = startRow + max(0, (height - overlayHeight) / 2)
-        let overlayStartCol = startCol + max(0, (boardWidth - overlayWidth) / 2)
-
-        let topBorder = String(repeating: "═", count: overlayWidth)
+        let overlayInnerWidth = max(16, width * 2 - 2)
+        let overlayTotalWidth = overlayInnerWidth + 2 // border chars on left/right
         let scoreText = String(format: "Score: %d", score)
         let levelText = String(format: "Level: %d", level)
 
-        let lines: [(text: String, isHighlighted: Bool)] = [
+        let bodyRows: [(text: String, isHighlighted: Bool)] = [
             ("GAME OVER", true),
             (scoreText, false),
             (levelText, false),
@@ -141,26 +136,34 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             ("Press ESC to exit", false),
         ]
 
+        let overlayTotalHeight = bodyRows.count + 2 // body rows + top/bottom borders
+        let contentHeight = height - 1
+        let contentWidth = width * 2
+        let overlayStartRow = startRow + 1 + max(0, (contentHeight - overlayTotalHeight) / 2)
+        let overlayStartCol = startCol + 1 + max(0, (contentWidth - overlayTotalWidth) / 2)
+
+        let topBorder = String(repeating: "═", count: overlayInnerWidth)
+
         var output = ""
         // Top border
         output += terminal.cursorPosition(row: overlayStartRow, col: overlayStartCol)
         output += terminal.bold + "╔" + topBorder + "╗" + terminal.reset
 
         // Content lines
-        for (index, line) in lines.enumerated() {
-            let row = overlayStartRow + index + 1
-            output += terminal.cursorPosition(row: row, col: overlayStartCol)
+        for (index, row) in bodyRows.enumerated() {
+            let r = overlayStartRow + index + 1
+            output += terminal.cursorPosition(row: r, col: overlayStartCol)
             output += terminal.bold + "║" + terminal.reset
-            if line.isHighlighted {
-                output += TetrominoColor.red.ansiCode + terminal.bold + line.text + String(repeating: " ", count: max(0, overlayWidth - line.text.count)) + terminal.reset
+            if row.isHighlighted {
+                output += TetrominoColor.red.ansiCode + terminal.bold + row.text + String(repeating: " ", count: max(0, overlayInnerWidth - row.text.count)) + terminal.reset
             } else {
-                output += line.text + String(repeating: " ", count: max(0, overlayWidth - line.text.count))
+                output += row.text + String(repeating: " ", count: max(0, overlayInnerWidth - row.text.count))
             }
             output += terminal.bold + "║" + terminal.reset
         }
 
         // Bottom border
-        output += terminal.cursorPosition(row: overlayStartRow + lines.count + 1, col: overlayStartCol)
+        output += terminal.cursorPosition(row: overlayStartRow + bodyRows.count + 1, col: overlayStartCol)
         output += terminal.bold + "╚" + topBorder + "╝" + terminal.reset
 
         return output
