@@ -116,13 +116,13 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
 
     private func renderOverlay(
         lines: [(text: String, highlighted: Bool)],
-        in contentRect: (row: Int, col: Int, height: Int, width: Int)
+        centeredIn area: (row: Int, col: Int, height: Int, width: Int)
     ) -> String {
         let innerWidth = max(lines.map { $0.text.count }.max()!, 1) + 2
         let totalWidth = innerWidth + 2
         let totalHeight = lines.count + 2
-        let startRow = contentRect.row + max(0, (contentRect.height - totalHeight) / 2)
-        let startCol = contentRect.col + max(0, (contentRect.width - totalWidth) / 2)
+        let startRow = area.row + max(0, (area.height - totalHeight) / 2)
+        let startCol = area.col + max(0, (area.width - totalWidth) / 2)
         let border = String(repeating: "═", count: innerWidth)
 
         var output = ""
@@ -160,7 +160,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         width: Int,
         height: Int
     ) -> String {
-        let contentRect = (row: startRow + 1, col: startCol + 1, height: height - 1, width: width * 2)
+        let size = terminal.getTerminalSize()
         return renderOverlay(
             lines: [
                 ("GAME OVER", highlighted: true),
@@ -170,7 +170,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
                 ("Press SPACE for new game", highlighted: false),
                 ("Press ESC to exit", highlighted: false),
             ],
-            in: contentRect
+            centeredIn: (row: 1, col: 1, height: size.rows, width: size.cols)
         )
     }
 }
