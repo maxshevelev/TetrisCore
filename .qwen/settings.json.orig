@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(swift *)",
+      "Bash(sleep *)",
+      "Bash(kill *)",
+      "Bash(true)"
+    ]
+  },
+  "$version": 4
+}
