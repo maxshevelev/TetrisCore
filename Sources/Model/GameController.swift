@@ -14,6 +14,7 @@ public actor GameController: InputReceiver {
 
     private var state: GameState = .initializing {
         didSet {
+            log.log("[State] \(oldValue) -> \(state)")
             switch state {
             case .dropping:
                 stopLockTimer()
@@ -44,15 +45,21 @@ public actor GameController: InputReceiver {
 
     private let inputBuffer = InputBuffer()
 
+    // MARK: - Logger
+
+    private let log: GameLogger
+
     // MARK: - Callbacks
 
     private let onRender: @Sendable (GameSessionState) -> Void
     private let onGameFinished: @Sendable () -> Void
 
     public init(
+        logger: GameLogger = GameLogger(),
         onRender: @escaping @Sendable (GameSessionState) -> Void,
         onGameFinished: @escaping @Sendable () -> Void
     ) {
+        self.log = logger
         self.onRender = onRender
         self.onGameFinished = onGameFinished
         self.grid = Array(repeating: Array(repeating: .empty, count: width), count: height)
@@ -128,6 +135,7 @@ public actor GameController: InputReceiver {
     }
 
     public func start() {
+        log.log("[LifeCycle] Game started")
         render()
         startInputListener()
         state = .dropping
@@ -146,6 +154,7 @@ public actor GameController: InputReceiver {
     }
 
     private func restart() {
+        log.log("[LifeCycle] Game restarted")
         resetGame()
         state = .dropping
         render()
@@ -181,15 +190,19 @@ public actor GameController: InputReceiver {
 
                 switch keyEvent {
                 case .moveLeft:
+                    log.log("[Input] move_left at x=\(currentX)")
                     guard isPlaying else { continue }
                     moveLeft()
                 case .moveRight:
+                    log.log("[Input] move_right at x=\(currentX)")
                     guard isPlaying else { continue }
                     moveRight()
                 case .rotate:
+                    log.log("[Input] rotate")
                     guard isPlaying else { continue }
                     rotatePiece()
                 case .hardDrop:
+                    log.log("[Input] hard_drop at y=\(currentY)")
                     if isPlaying {
                         hardDropPiece()
                     } else if state == .gameOver {
@@ -198,6 +211,7 @@ public actor GameController: InputReceiver {
                         continue
                     }
                 case .esc:
+                    log.log("[Input] esc")
                     if isPlaying {
                         state = .paused
                     } else if state == .paused {
@@ -209,6 +223,7 @@ public actor GameController: InputReceiver {
                         continue
                     }
                 case .quit:
+                    log.log("[Input] quit")
                     state = .gameOver
                 }
                 render()
@@ -271,6 +286,7 @@ public actor GameController: InputReceiver {
 
     private func lockPiecePrivate() {
         guard let piece = currentPiece else { return }
+        log.log("[Piece] Locked \([piece.shape.rawValue]) at (\(currentX),\(currentY))")
         for (x, y) in piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY) {
             if y >= 0 && x >= 0 && x < width && y < height {
                 grid[y][x] = .filled(piece.shape.blockColor)
@@ -292,6 +308,9 @@ public actor GameController: InputReceiver {
             score += 100
             linesCleared += 1
         }
+        if !linesToClear.isEmpty {
+            log.log("[Lines] Cleared \([linesToClear.count]) line(s), score=\(score) total_lines=\(linesCleared)")
+        }
     }
 
     private func spawnNextPiece() {
@@ -305,7 +324,9 @@ public actor GameController: InputReceiver {
         if currentPiece != nil {
             currentX = width / 2 - 2
             currentY = 0
+            log.log("[Piece] Spawned \([currentPiece!.shape.rawValue])")
             if isColliding() {
+                log.log("[GameOver] Score: \(score) Lines: \(linesCleared)")
                 state = .gameOver
             }
         }
