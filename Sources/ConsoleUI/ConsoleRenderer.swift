@@ -114,6 +114,44 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         return output
     }
 
+    private func renderOverlay(
+        lines: [(text: String, highlighted: Bool)],
+        in contentRect: (row: Int, col: Int, height: Int, width: Int)
+    ) -> String {
+        let innerWidth = max(lines.map { $0.text.count }.max()!, 1) + 2
+        let totalWidth = innerWidth + 2
+        let totalHeight = lines.count + 2
+        let startRow = contentRect.row + max(0, (contentRect.height - totalHeight) / 2)
+        let startCol = contentRect.col + max(0, (contentRect.width - totalWidth) / 2)
+        let border = String(repeating: "═", count: innerWidth)
+
+        var output = ""
+        output += terminal.cursorPosition(row: startRow, col: startCol)
+        output += terminal.bold + "╔" + border + "╗" + terminal.reset
+
+        for (i, line) in lines.enumerated() {
+            let r = startRow + i + 1
+            let leftPad = (innerWidth - line.text.count) / 2
+            let rightPad = innerWidth - line.text.count - leftPad
+            output += terminal.cursorPosition(row: r, col: startCol)
+            output += terminal.bold + "║" + terminal.reset
+            if line.highlighted {
+                output += String(repeating: " ", count: leftPad)
+                output += TetrominoColor.red.ansiCode + terminal.bold + line.text + terminal.reset
+                output += String(repeating: " ", count: rightPad)
+            } else {
+                output += String(repeating: " ", count: leftPad)
+                output += line.text
+                output += String(repeating: " ", count: rightPad)
+            }
+            output += terminal.bold + "║" + terminal.reset
+        }
+
+        output += terminal.cursorPosition(row: startRow + lines.count + 1, col: startCol)
+        output += terminal.bold + "╚" + border + "╝" + terminal.reset
+        return output
+    }
+
     private func renderGameOverOverlay(
         score: Int,
         level: Int,
@@ -122,50 +160,17 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         width: Int,
         height: Int
     ) -> String {
-        let overlayInnerWidth = max(16, width * 2 - 2)
-        let overlayTotalWidth = overlayInnerWidth + 2 // border chars on left/right
-        let scoreText = String(format: "Score: %d", score)
-        let levelText = String(format: "Level: %d", level)
-
-        let bodyRows: [(text: String, isHighlighted: Bool)] = [
-            ("GAME OVER", true),
-            (scoreText, false),
-            (levelText, false),
-            ("", false),
-            ("Press SPACE for new game", false),
-            ("Press ESC to exit", false),
-        ]
-
-        let overlayTotalHeight = bodyRows.count + 2 // body rows + top/bottom borders
-        let contentHeight = height - 1
-        let contentWidth = width * 2
-        let overlayStartRow = startRow + 1 + max(0, (contentHeight - overlayTotalHeight) / 2)
-        let overlayStartCol = startCol + 1 + max(0, (contentWidth - overlayTotalWidth) / 2)
-
-        let topBorder = String(repeating: "═", count: overlayInnerWidth)
-
-        var output = ""
-        // Top border
-        output += terminal.cursorPosition(row: overlayStartRow, col: overlayStartCol)
-        output += terminal.bold + "╔" + topBorder + "╗" + terminal.reset
-
-        // Content lines
-        for (index, row) in bodyRows.enumerated() {
-            let r = overlayStartRow + index + 1
-            output += terminal.cursorPosition(row: r, col: overlayStartCol)
-            output += terminal.bold + "║" + terminal.reset
-            if row.isHighlighted {
-                output += TetrominoColor.red.ansiCode + terminal.bold + row.text + String(repeating: " ", count: max(0, overlayInnerWidth - row.text.count)) + terminal.reset
-            } else {
-                output += row.text + String(repeating: " ", count: max(0, overlayInnerWidth - row.text.count))
-            }
-            output += terminal.bold + "║" + terminal.reset
-        }
-
-        // Bottom border
-        output += terminal.cursorPosition(row: overlayStartRow + bodyRows.count + 1, col: overlayStartCol)
-        output += terminal.bold + "╚" + topBorder + "╝" + terminal.reset
-
-        return output
+        let contentRect = (row: startRow + 1, col: startCol + 1, height: height - 1, width: width * 2)
+        return renderOverlay(
+            lines: [
+                ("GAME OVER", highlighted: true),
+                (String(format: "Score: %d", score), highlighted: false),
+                (String(format: "Level: %d", level), highlighted: false),
+                ("", highlighted: false),
+                ("Press SPACE for new game", highlighted: false),
+                ("Press ESC to exit", highlighted: false),
+            ],
+            in: contentRect
+        )
     }
 }
