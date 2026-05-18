@@ -94,7 +94,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         }
 
         if data.state == .gameOver {
-            let overlay = renderGameOverOverlay(score: data.score, level: data.level, startRow: startRow, startCol: startCol, width: width, height: height)
+            let overlay = renderGameOverOverlay(score: data.score, level: data.level, terminalSize: size)
             output += overlay
         } else {
             output += terminal.cursorPosition(row: startRow + height + 3, col: centerColumn(for: scoreText))
@@ -114,8 +114,27 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         return output
     }
 
+    // MARK: - Overlay
+
+    enum Alignment { case leading, center, trailing }
+    enum LineColor { case `none`, color(TetrominoColor) }
+
+    struct OverlayLine {
+        let text: String
+        let alignment: Alignment
+        let color: LineColor
+
+        static func plain(_ text: String) -> OverlayLine {
+            OverlayLine(text: text, alignment: .center, color: .none)
+        }
+
+        static func colored(_ text: String, _ color: TetrominoColor) -> OverlayLine {
+            OverlayLine(text: text, alignment: .center, color: .color(color))
+        }
+    }
+
     private func renderOverlay(
-        lines: [(text: String, highlighted: Bool)],
+        lines: [OverlayLine],
         centeredIn area: (row: Int, col: Int, height: Int, width: Int)
     ) -> String {
         let innerWidth = max(lines.map { $0.text.count }.max()!, 1) + 2
@@ -131,19 +150,24 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
 
         for (i, line) in lines.enumerated() {
             let r = startRow + i + 1
-            let leftPad = (innerWidth - line.text.count) / 2
-            let rightPad = innerWidth - line.text.count - leftPad
             output += terminal.cursorPosition(row: r, col: startCol)
             output += terminal.bold + "║" + terminal.reset
-            if line.highlighted {
-                output += String(repeating: " ", count: leftPad)
-                output += TetrominoColor.red.ansiCode + terminal.bold + line.text + terminal.reset
-                output += String(repeating: " ", count: rightPad)
-            } else {
-                output += String(repeating: " ", count: leftPad)
-                output += line.text
-                output += String(repeating: " ", count: rightPad)
+            let contentLen = line.text.count
+            let available = max(innerWidth - contentLen, 0)
+            let (leftPad, rightPad): (Int, Int)
+            switch line.alignment {
+            case .leading:  leftPad = 0; rightPad = available
+            case .center:   leftPad = available / 2; rightPad = available - leftPad
+            case .trailing: leftPad = available; rightPad = 0
             }
+            output += String(repeating: " ", count: leftPad)
+            switch line.color {
+            case .none:
+                output += line.text
+            case .color(let c):
+                output += c.ansiCode + terminal.bold + line.text + terminal.reset
+            }
+            output += String(repeating: " ", count: rightPad)
             output += terminal.bold + "║" + terminal.reset
         }
 
@@ -155,22 +179,18 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
     private func renderGameOverOverlay(
         score: Int,
         level: Int,
-        startRow: Int,
-        startCol: Int,
-        width: Int,
-        height: Int
+        terminalSize: (rows: Int, cols: Int)
     ) -> String {
-        let size = terminal.getTerminalSize()
         return renderOverlay(
             lines: [
-                ("GAME OVER", highlighted: true),
-                (String(format: "Score: %d", score), highlighted: false),
-                (String(format: "Level: %d", level), highlighted: false),
-                ("", highlighted: false),
-                ("Press SPACE for new game", highlighted: false),
-                ("Press ESC to exit", highlighted: false),
+                OverlayLine.colored("GAME OVER", .red),
+                OverlayLine.plain(String(format: "Score: %d", score)),
+                OverlayLine.plain(String(format: "Level: %d", level)),
+                OverlayLine.plain(""),
+                OverlayLine.plain("Press SPACE for new game"),
+                OverlayLine.plain("Press ESC to exit"),
             ],
-            centeredIn: (row: 1, col: 1, height: size.rows, width: size.cols)
+            centeredIn: (row: 1, col: 1, height: terminalSize.rows, width: terminalSize.cols)
         )
     }
 }
