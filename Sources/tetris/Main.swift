@@ -1,22 +1,19 @@
 // Main.swift - Entry point: wires components and starts the game
 
+import ArgumentParser
 import ConsoleUI
 import Foundation
 import Model
 
 @main
-struct Tetris {
-    static func main() async {
-        var logFile: String?
-        let args = CommandLine.arguments
-        if let index = args.firstIndex(of: "-d") {
-            logFile = args.dropFirst(Int(index) + 1).first
-        }
+struct Tetris: AsyncParsableCommand {
+    @Option(name: .shortAndLong, help: "Path to a log file for debug output.")
+    var debug: String?
 
+    func run() async throws {
         let logger: GameLogger
-        if let path = logFile,
-           let url = URL(string: path)
-        {
+        if let path = debug {
+            let url = URL(fileURLWithPath: path)
             if !FileManager.default.fileExists(atPath: path) {
                 FileManager.default.createFile(atPath: path, contents: nil)
             }

@@ -8,6 +8,9 @@ let package = Package(
     platforms: [
         .macOS(.v13)
     ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-argument-parser", from: "1.7.1"),
+    ],
     targets: [
         // Model: UI-agnostic game logic
         .target(
@@ -21,7 +24,10 @@ let package = Package(
         // Main executable
         .executableTarget(
             name: "tetris",
-            dependencies: ["Model", "ConsoleUI"]
+            dependencies: [
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                "Model", "ConsoleUI",
+            ]
         ),
         // Tests
         .testTarget(
