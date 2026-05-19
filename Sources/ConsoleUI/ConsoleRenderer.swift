@@ -28,23 +28,6 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         let dropInterval = max(0.15, 0.8 - Double(data.level - 1) * 0.06)
 
         var output = terminal.home + terminal.eraseDown
-
-        // Draw next piece preview
-        if !data.nextPieceBlocks.isEmpty {
-            output += terminal.cursorPosition(row: startRow, col: nextCol)
-            output += terminal.bold + "Next:" + terminal.reset
-            for y in 0..<4 {
-                output += terminal.cursorPosition(row: startRow + y + 1, col: nextCol)
-                for x in 0..<4 {
-                    if let block = data.nextPieceBlocks.first(where: { $0.x == x && $0.y == y }) {
-                        output += block.color.ansiCode + "██" + terminal.reset
-                    } else {
-                        output += "  "
-                    }
-                }
-            }
-        }
-
         output += terminal.cursorPosition(row: startRow, col: startCol)
         output += terminal.bold + "╔" + String(repeating: "═", count: width * 2) + "╗" + terminal.reset
 
@@ -74,11 +57,11 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         output += terminal.bold + "╚" + String(repeating: "═", count: width * 2) + "╝" + terminal.reset
 
         func centerColumn(for text: String) -> Int {
-            return startCol + max(0, (boardWidth - text.count) / 2)
+            let offset = (boardWidth - text.count) / 2
+            return max(1, startCol + offset)
         }
 
         let scoreText = "Score: \(data.score)  Level: \(data.level)"
-        let controlsText = "Controls: j=left  k=rotate  l=right  SPACE=drop  q=quit"
         let statusText: String
         switch data.state {
         case .initializing:
@@ -90,24 +73,60 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         case .paused:
             statusText = "PAUSED - Press ESC to resume"
         case .gameOver:
-            statusText = "Game Over! ESC - exit, SPACE - new game"
+            statusText = "Game Over"
         }
+
+        // Compute layout positions
+        let controlsCol = min(startCol + boardWidth + 2, size.cols - 12)
+
+        let controlsItems = [
+            "j=left",
+            "k=rotate",
+            "l=right",
+            "SPACE=drop",
+            "ESC=pause",
+            "q=quit",
+        ]
 
         if data.state == .gameOver {
             let overlay = renderGameOverOverlay(score: data.score, level: data.level, topScores: data.topScores, terminalSize: size)
             output += overlay
         } else {
+            // Score line
             output += terminal.cursorPosition(row: startRow + height + 3, col: centerColumn(for: scoreText))
             output += "Score: " + terminal.bold + String(data.score) + terminal.reset + "  Level: " + terminal.bold + String(data.level) + terminal.reset
 
-            output += terminal.cursorPosition(row: startRow + height + 4, col: centerColumn(for: controlsText))
-            output += controlsText
-
+            // Empty line
+            // Status line
             output += terminal.cursorPosition(row: startRow + height + 5, col: centerColumn(for: statusText))
             if data.state == .paused {
                 output += terminal.bold + TetrominoColor.red.ansiCode + statusText + terminal.reset
             } else {
                 output += statusText
+            }
+
+            // Next piece preview (left side)
+            if !data.nextPieceBlocks.isEmpty {
+                output += terminal.cursorPosition(row: startRow, col: nextCol)
+                output += terminal.bold + "Next:" + terminal.reset
+                for y in 0..<4 {
+                    output += terminal.cursorPosition(row: startRow + y + 1, col: nextCol)
+                    for x in 0..<4 {
+                        if let block = data.nextPieceBlocks.first(where: { $0.x == x && $0.y == y }) {
+                            output += block.color.ansiCode + "██" + terminal.reset
+                        } else {
+                            output += "  "
+                        }
+                    }
+                }
+            }
+
+            // Controls (right side)
+            output += terminal.cursorPosition(row: startRow, col: controlsCol)
+            output += terminal.bold + "Controls:" + terminal.reset
+            for (i, item) in controlsItems.enumerated() {
+                output += terminal.cursorPosition(row: startRow + i + 1, col: controlsCol)
+                output += item
             }
         }
 
@@ -122,14 +141,15 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
     struct OverlayLine {
         let text: String
         let alignment: Alignment
-        let color: LineColor
+        let color: TetrominoColor?
+        let isBold: Bool
 
-        static func plain(_ text: String) -> OverlayLine {
-            OverlayLine(text: text, alignment: .center, color: .none)
+        static func plain(_ text: String, bold: Bool = false, color: TetrominoColor? = nil) -> OverlayLine {
+            OverlayLine(text: text, alignment: .center, color: color, isBold: bold)
         }
 
-        static func colored(_ text: String, _ color: TetrominoColor) -> OverlayLine {
-            OverlayLine(text: text, alignment: .center, color: .color(color))
+        static func bold(_ text: String, color: TetrominoColor? = nil) -> OverlayLine {
+            OverlayLine(text: text, alignment: .center, color: color, isBold: true)
         }
     }
 
@@ -161,11 +181,12 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             case .trailing: leftPad = available; rightPad = 0
             }
             output += String(repeating: " ", count: leftPad)
-            switch line.color {
-            case .none:
+            if let textColor = line.color {
+                output += textColor.ansiCode + terminal.bold + line.text + terminal.reset
+            } else if line.isBold {
+                output += terminal.bold + line.text + terminal.reset
+            } else {
                 output += line.text
-            case .color(let c):
-                output += c.ansiCode + terminal.bold + line.text + terminal.reset
             }
             output += String(repeating: " ", count: rightPad)
             output += terminal.bold + "║" + terminal.reset
@@ -183,17 +204,22 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         terminalSize: (rows: Int, cols: Int)
     ) -> String {
         var lines: [OverlayLine] = [
-            OverlayLine.colored("GAME OVER", .red),
+            OverlayLine.bold("GAME OVER", color: .red),
             OverlayLine.plain(String(format: "Score: %d", score)),
             OverlayLine.plain(String(format: "Level: %d", level)),
         ]
 
         if !topScores.isEmpty {
             lines.append(OverlayLine.plain(""))
-            lines.append(OverlayLine.colored("Top Scores", .yellow))
+            lines.append(OverlayLine.bold("Top Scores"))
             for (i, entry) in topScores.enumerated() {
-                lines.append(OverlayLine.plain(
-                    String(format: "%d. %d  (lvl %d)", i + 1, entry.score, entry.level)))
+                let rankText = String(format: "%d. %d  (lvl %d)", i + 1, entry.score, entry.level)
+                let isCurrent = entry.score == score
+                if isCurrent {
+                    lines.append(OverlayLine.plain("  " + rankText + " ←"))
+                } else {
+                    lines.append(OverlayLine.plain(rankText))
+                }
             }
         }
 

@@ -15,12 +15,19 @@ struct Tetris {
 
         let logger: GameLogger
         if let path = logFile,
-           let handle = try? FileHandle(forWritingTo: URL(fileURLWithPath: path))
+           let url = URL(string: path)
         {
-            _ = try? handle.seekToEnd()
-            logger = GameLogger { message in
-                let timestamp = ISO8601DateFormatter().string(from: Date())
-                handle.write(Data("[\(timestamp)] \(message)\n".utf8))
+            if !FileManager.default.fileExists(atPath: path) {
+                FileManager.default.createFile(atPath: path, contents: nil)
+            }
+            if let handle = try? FileHandle(forWritingTo: url) {
+                _ = try? handle.seekToEnd()
+                logger = GameLogger { message in
+                    let timestamp = ISO8601DateFormatter().string(from: Date())
+                    handle.write(Data("[\(timestamp)] \(message)\n".utf8))
+                }
+            } else {
+                logger = GameLogger()
             }
         } else {
             logger = GameLogger()

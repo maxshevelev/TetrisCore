@@ -28,8 +28,10 @@ public actor GameController: InputReceiver {
             case .gameOver:
                 stopDropTimer()
                 stopLockTimer()
-                log.log("[Score] Saving score=\(score) level=\(level)")
-                scoreStorage.add(score: score, level: level)
+                if oldValue != .gameOver {
+                    log.log("[Score] Saving score=\(score) level=\(level)")
+                    scoreStorage.add(score: score, level: level)
+                }
             default: break
             }
         }

@@ -35,8 +35,12 @@ public final class ScoreStorage: Sendable {
     public func add(score: Int, level: Int) -> [StoredScore] {
         lock.lock()
         defer { lock.unlock() }
+        let newEntry = StoredScore(score: score, level: level)
+        guard !loadScoresPrivate().contains(where: { $0.score == score && $0.level == level }) else {
+            return loadScoresPrivate()
+        }
         var scores = loadScoresPrivate()
-        scores.append(StoredScore(score: score, level: level))
+        scores.append(newEntry)
         scores.sort { $0.score > $1.score }
         scores = Array(scores.prefix(10))
         saveScoresPrivate(scores)
