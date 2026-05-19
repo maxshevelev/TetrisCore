@@ -4,10 +4,11 @@ import ArgumentParser
 import ConsoleUI
 import Foundation
 import Model
+import os
 
 @main
 struct Tetris: AsyncParsableCommand {
-    @Option(name: .shortAndLong, help: "Path to a log file for debug output.")
+    @Option(name: .shortAndLong, help: "Logging level: debug, info, notice, error, or fault.")
     var debug: String?
 
     @Option(name: .shortAndLong, help: "Player name for the game session.")
@@ -20,26 +21,15 @@ struct Tetris: AsyncParsableCommand {
         }
         let playerName = defaultPlayerName()
 
-        let logger: GameLogger
-        if let path = debug {
-            let url = URL(fileURLWithPath: path)
-            if !FileManager.default.fileExists(atPath: path) {
-                FileManager.default.createFile(atPath: path, contents: nil)
-            }
-            if let handle = try? FileHandle(forWritingTo: url) {
-                _ = try? handle.seekToEnd()
-                logger = GameLogger { message in
-                    let timestamp = ISO8601DateFormatter().string(from: Date())
-                    handle.write(Data("[\(timestamp)] \(message)\n".utf8))
-                }
-            } else {
-                logger = GameLogger()
-            }
+        let logLevel: LogLevel?
+        if let raw = debug {
+            logLevel = LogLevel(rawValue: raw.lowercased())
         } else {
-            logger = GameLogger()
+            logLevel = nil
         }
 
+        let logger = Logger(subsystem: "com.maxik.tetris", category: "game")
         let ui = ConsoleGameUI(logger: logger, playerName: playerName)
-        await ui.run()
+        await ui.run(logLevel: logLevel)
     }
 }

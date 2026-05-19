@@ -2,6 +2,7 @@
 // Actor provides data-race-free concurrent access
 
 import Foundation
+import os
 
 public actor GameController: InputReceiver {
     // MARK: - Constants
@@ -14,7 +15,7 @@ public actor GameController: InputReceiver {
 
     private var state: GameState = .initializing {
         didSet {
-            log.log("[State] \(oldValue) -> \(state)")
+            logDebug("[State] \(oldValue) -> \(state)")
             switch state {
             case .dropping:
                 stopLockTimer()
@@ -29,7 +30,7 @@ public actor GameController: InputReceiver {
                 stopDropTimer()
                 stopLockTimer()
                 if oldValue != .gameOver {
-                    log.log("[Score] Saving score=\(score) level=\(level) player=\(playerName)")
+                    logDebug("[Score] Saving score=\(score) level=\(level) player=\(playerName)")
                     scoreStorage.add(score: score, level: level, playerName: playerName)
                 }
             default: break
@@ -51,7 +52,8 @@ public actor GameController: InputReceiver {
 
     // MARK: - Logger
 
-    private let log: GameLogger
+    private let log: Logger
+    private let minLogLevel: LogLevel?
 
     // MARK: - Score Storage
 
@@ -64,12 +66,14 @@ public actor GameController: InputReceiver {
     private let onGameFinished: @Sendable () -> Void
 
     public init(
-        logger: GameLogger = GameLogger(),
+        logger: Logger = Logger(),
+        logLevel: LogLevel? = nil,
         scoreStorage: ScoreStorage = ScoreStorage(),
         playerName: String = defaultPlayerName(),
         onRender: @escaping @Sendable (GameSessionState) -> Void,
         onGameFinished: @escaping @Sendable () -> Void
     ) {
+        self.minLogLevel = logLevel
         self.log = logger
         self.scoreStorage = scoreStorage
         self.playerName = playerName
@@ -147,8 +151,13 @@ public actor GameController: InputReceiver {
         lockTimer = createLockTimer(interval: lockDelay)
     }
 
+    private func logDebug(_ message: String) {
+        guard let minLogLevel, minLogLevel.allows(.debug) else { return }
+        log.debug("\(message, privacy: .public)")
+    }
+
     public func start() {
-        log.log("[LifeCycle] Game started")
+        logDebug("[LifeCycle] Game started")
         render()
         startInputListener()
         state = .dropping
@@ -167,7 +176,7 @@ public actor GameController: InputReceiver {
     }
 
     private func restart() {
-        log.log("[LifeCycle] Game restarted")
+        logDebug("[LifeCycle] Game restarted")
         resetGame()
         state = .dropping
         render()
@@ -203,19 +212,19 @@ public actor GameController: InputReceiver {
 
                 switch keyEvent {
                 case .moveLeft:
-                    log.log("[Input] move_left at x=\(currentX)")
+                    logDebug("[Input] move_left at x=\(currentX)")
                     guard isPlaying else { continue }
                     moveLeft()
                 case .moveRight:
-                    log.log("[Input] move_right at x=\(currentX)")
+                    logDebug("[Input] move_right at x=\(currentX)")
                     guard isPlaying else { continue }
                     moveRight()
                 case .rotate:
-                    log.log("[Input] rotate")
+                    logDebug("[Input] rotate")
                     guard isPlaying else { continue }
                     rotatePiece()
                 case .hardDrop:
-                    log.log("[Input] hard_drop at y=\(currentY)")
+                    logDebug("[Input] hard_drop at y=\(currentY)")
                     if isPlaying {
                         hardDropPiece()
                     } else if state == .gameOver {
@@ -224,7 +233,7 @@ public actor GameController: InputReceiver {
                         continue
                     }
                 case .esc:
-                    log.log("[Input] esc")
+                    logDebug("[Input] esc")
                     if isPlaying {
                         state = .paused
                     } else if state == .paused {
@@ -236,7 +245,7 @@ public actor GameController: InputReceiver {
                         continue
                     }
                 case .quit:
-                    log.log("[Input] quit")
+                    logDebug("[Input] quit")
                     state = .gameOver
                 }
                 render()
@@ -299,7 +308,7 @@ public actor GameController: InputReceiver {
 
     private func lockPiecePrivate() {
         guard let piece = currentPiece else { return }
-        log.log("[Piece] Locked \([piece.shape.rawValue]) at (\(currentX),\(currentY))")
+        logDebug("[Piece] Locked \([piece.shape.rawValue]) at (\(currentX),\(currentY))")
         for (x, y) in piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY) {
             if y >= 0 && x >= 0 && x < width && y < height {
                 grid[y][x] = .filled(piece.shape.blockColor)
@@ -322,7 +331,7 @@ public actor GameController: InputReceiver {
             linesCleared += 1
         }
         if !linesToClear.isEmpty {
-            log.log("[Lines] Cleared \([linesToClear.count]) line(s), score=\(score) total_lines=\(linesCleared)")
+            logDebug("[Lines] Cleared \([linesToClear.count]) line(s), score=\(score) total_lines=\(linesCleared)")
         }
     }
 
@@ -337,9 +346,9 @@ public actor GameController: InputReceiver {
         if currentPiece != nil {
             currentX = width / 2 - 2
             currentY = 0
-            log.log("[Piece] Spawned \([currentPiece!.shape.rawValue])")
+            logDebug("[Piece] Spawned \([currentPiece!.shape.rawValue])")
             if isColliding() {
-                log.log("[GameOver] Score: \(score) Lines: \(linesCleared)")
+                logDebug("[GameOver] Score: \(score) Lines: \(linesCleared)")
                 state = .gameOver
             }
         }

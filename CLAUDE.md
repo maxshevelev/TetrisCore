@@ -10,7 +10,7 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 - **Event-driven** input via `InputReceiver` protocol + `InputBuffer`
 - **Virtual grid rendering** with ANSI escape sequences, centered on terminal
 - **Persistent score storage** in `~/.tetris/scores.json` (top 10, JSON-backed)
-- **Optional debug logging** via `-d <file>` flag, timestamps each entry
+- **Optional debug logging** via `-d` flag with log level (debug, info, notice, error, fault), uses Apple `os.Logger`
 - **Optional player name** via `-u, --user` flag, persisted in `~/.tetris/settings.json`, defaults to Unix username
 
 ## Key Files & Responsibilities
@@ -19,7 +19,7 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 |------|------|
 | `Sources/tetris/Main.swift` | Entry point, ArgumentParser CLI, wires logger + UI |
 | `Sources/Model/GameController.swift` | Actor: game loop, input handling, state machine, scoring |
-| `Sources/Model/GameLogger.swift` | Sendable closure wrapper for debug logging |
+| `Sources/Model/LogLevel.swift` | Log level enum for `os.Logger` gating |
 | `Sources/Model/ScoreStorage.swift` | JSON persistence for top-10 scores, thread-safe |
 | `Sources/Model/GameSessionState.swift` | Immutable snapshot passed to renderer |
 | `Sources/ConsoleUI/ConsoleRenderer.swift` | Virtual grid → ANSI, overlay system with `OverlayLine` |
@@ -36,12 +36,12 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 - Grid rendering: virtual buffer → centered ANSI output
 - Soft drop with lock delay (0.5s), piece movement resets timer
 - Scores deduplicated on save; top 10 kept by score descending
-- Log file created on demand if `-d <path>` specified
+- Debug logging gated by `LogLevel`; `-d` sets the minimum level, messages below are suppressed
 
 ## Active Tasks & Status
 
 - ✅ ArgumentParser integration — `-d` / `--debug` flag working
 - ✅ Score table with persistent JSON storage and game-over overlay
 - ✅ Player name via `-u, --user` with `~/.tetris/settings.json` persistence
-- ✅ Debug logging across GameController lifecycle events
+- ✅ Debug logging via `os.Logger` with `LogLevel` gating (`-d debug|info|notice|error|fault`)
 - ✅ OverlayLine refactored with `bold` factory and optional color

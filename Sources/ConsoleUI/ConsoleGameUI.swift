@@ -2,19 +2,20 @@
 
 import Foundation
 import Model
+import os
 
 public final class ConsoleGameUI: @unchecked Sendable {
     private var input: ConsoleInputHandler?
-    private let logger: GameLogger
+    private let logger: Logger
     private let playerName: String
 
-    public init(logger: GameLogger = GameLogger(), playerName: String = defaultPlayerName()) {
+    public init(logger: Logger = Logger(), playerName: String = defaultPlayerName()) {
         self.input = ConsoleInputHandler()
         self.logger = logger
         self.playerName = playerName
     }
 
-    public func run() async {
+    public func run(logLevel: LogLevel? = nil) async {
         print(Terminal.hideCursor)
         print(Terminal.clear)
         fflush(stdout)
@@ -30,6 +31,7 @@ public final class ConsoleGameUI: @unchecked Sendable {
 
         gameController = GameController(
             logger: logger,
+            logLevel: logLevel,
             scoreStorage: scoreStorage,
             playerName: playerName,
             onRender: { state in
