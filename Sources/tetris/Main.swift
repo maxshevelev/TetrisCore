@@ -10,7 +10,16 @@ struct Tetris: AsyncParsableCommand {
     @Option(name: .shortAndLong, help: "Path to a log file for debug output.")
     var debug: String?
 
+    @Option(name: .shortAndLong, help: "Player name for the game session.")
+    var user: String?
+
     func run() async throws {
+        // Persist the player name if explicitly provided
+        if let user {
+            storePlayerName(user)
+        }
+        let playerName = defaultPlayerName()
+
         let logger: GameLogger
         if let path = debug {
             let url = URL(fileURLWithPath: path)
@@ -30,7 +39,7 @@ struct Tetris: AsyncParsableCommand {
             logger = GameLogger()
         }
 
-        let ui = ConsoleGameUI(logger: logger)
+        let ui = ConsoleGameUI(logger: logger, playerName: playerName)
         await ui.run()
     }
 }

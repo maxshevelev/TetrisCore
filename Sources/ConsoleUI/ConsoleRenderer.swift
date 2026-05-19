@@ -28,6 +28,14 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         let dropInterval = max(0.15, 0.8 - Double(data.level - 1) * 0.06)
 
         var output = terminal.home + terminal.eraseDown
+
+        // Player name above grid
+        let playerLine = data.state == .gameOver ? nil : ("Player: " + data.playerName)
+        if let playerLine {
+            output += terminal.cursorPosition(row: startRow - 2, col: centerColumn(for: playerLine))
+            output += terminal.bold + playerLine + terminal.reset
+        }
+
         output += terminal.cursorPosition(row: startRow, col: startCol)
         output += terminal.bold + "╔" + String(repeating: "═", count: width * 2) + "╗" + terminal.reset
 
@@ -77,28 +85,28 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         }
 
         // Compute layout positions
-        let controlsCol = min(startCol + boardWidth + 2, size.cols - 12)
+        let controlsCol = min(startCol + boardWidth + 6, size.cols - 12)
 
         let controlsItems = [
-            "j=left",
-            "k=rotate",
-            "l=right",
-            "SPACE=drop",
-            "ESC=pause",
-            "q=quit",
+            "j - left",
+            "k - rotate",
+            "l - right",
+            "SPACE - drop",
+            "ESC - pause",
+            "q - quit",
         ]
 
         if data.state == .gameOver {
-            let overlay = renderGameOverOverlay(score: data.score, level: data.level, topScores: data.topScores, terminalSize: size)
+            let overlay = renderGameOverOverlay(score: data.score, level: data.level, playerName: data.playerName, topScores: data.topScores, terminalSize: size)
             output += overlay
         } else {
             // Score line
-            output += terminal.cursorPosition(row: startRow + height + 3, col: centerColumn(for: scoreText))
+            output += terminal.cursorPosition(row: startRow + height + 4, col: centerColumn(for: scoreText))
             output += "Score: " + terminal.bold + String(data.score) + terminal.reset + "  Level: " + terminal.bold + String(data.level) + terminal.reset
 
             // Empty line
             // Status line
-            output += terminal.cursorPosition(row: startRow + height + 5, col: centerColumn(for: statusText))
+            output += terminal.cursorPosition(row: startRow + height + 6, col: centerColumn(for: statusText))
             if data.state == .paused {
                 output += terminal.bold + TetrominoColor.red.ansiCode + statusText + terminal.reset
             } else {
@@ -110,7 +118,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
                 output += terminal.cursorPosition(row: startRow, col: nextCol)
                 output += terminal.bold + "Next:" + terminal.reset
                 for y in 0..<4 {
-                    output += terminal.cursorPosition(row: startRow + y + 1, col: nextCol)
+                    output += terminal.cursorPosition(row: startRow + y + 2, col: nextCol)
                     for x in 0..<4 {
                         if let block = data.nextPieceBlocks.first(where: { $0.x == x && $0.y == y }) {
                             output += block.color.ansiCode + "██" + terminal.reset
@@ -125,7 +133,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             output += terminal.cursorPosition(row: startRow, col: controlsCol)
             output += terminal.bold + "Controls:" + terminal.reset
             for (i, item) in controlsItems.enumerated() {
-                output += terminal.cursorPosition(row: startRow + i + 1, col: controlsCol)
+                output += terminal.cursorPosition(row: startRow + i + 2, col: controlsCol)
                 output += item
             }
         }
@@ -172,6 +180,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             let r = startRow + i + 1
             output += terminal.cursorPosition(row: r, col: startCol)
             output += terminal.bold + "║" + terminal.reset
+
             let contentLen = line.text.count
             let available = max(innerWidth - contentLen, 0)
             let (leftPad, rightPad): (Int, Int)
@@ -200,12 +209,13 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
     private func renderGameOverOverlay(
         score: Int,
         level: Int,
+        playerName: String,
         topScores: [Model.StoredScore],
         terminalSize: (rows: Int, cols: Int)
     ) -> String {
         var lines: [OverlayLine] = [
             OverlayLine.bold("GAME OVER", color: .red),
-            OverlayLine.plain(String(format: "Score: %d", score)),
+            OverlayLine.plain("User: " + playerName + "  Score: " + String(format: "%d", score)),
             OverlayLine.plain(String(format: "Level: %d", level)),
         ]
 
@@ -213,8 +223,8 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             lines.append(OverlayLine.plain(""))
             lines.append(OverlayLine.bold("Top Scores"))
             for (i, entry) in topScores.enumerated() {
-                let rankText = String(format: "%d. %d  (lvl %d)", i + 1, entry.score, entry.level)
-                let isCurrent = entry.score == score
+                let rankText = String(format: "%d. %@ %d  (lvl %d)", i + 1, entry.playerName, entry.score, entry.level)
+                let isCurrent = entry.score == score && entry.playerName == playerName
                 if isCurrent {
                     lines.append(OverlayLine.plain("  " + rankText + " ←"))
                 } else {

@@ -11,6 +11,7 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 - **Virtual grid rendering** with ANSI escape sequences, centered on terminal
 - **Persistent score storage** in `~/.tetris/scores.json` (top 10, JSON-backed)
 - **Optional debug logging** via `-d <file>` flag, timestamps each entry
+- **Optional player name** via `-u, --user` flag, persisted in `~/.tetris/settings.json`, defaults to Unix username
 
 ## Key Files & Responsibilities
 
@@ -29,7 +30,6 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 
 ## Conventions & Constraints
 
-- No external UI dependencies — Darwin-only terminal I/O
 - Game logic in `Model` is UI-agnostic
 - Actor isolation for `GameController`; `@Sendable` closures for callbacks
 - Overlay uses `OverlayLine` with `plain`/`bold` factories, optional color
@@ -42,5 +42,6 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 
 - ✅ ArgumentParser integration — `-d` / `--debug` flag working
 - ✅ Score table with persistent JSON storage and game-over overlay
+- ✅ Player name via `-u, --user` with `~/.tetris/settings.json` persistence
 - ✅ Debug logging across GameController lifecycle events
 - ✅ OverlayLine refactored with `bold` factory and optional color

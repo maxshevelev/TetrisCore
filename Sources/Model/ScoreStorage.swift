@@ -3,11 +3,13 @@
 import Foundation
 
 public struct StoredScore: Codable, Equatable {
+    public let playerName: String
     public let score: Int
     public let level: Int
     public let date: String
 
-    public init(score: Int, level: Int, date: String = ISO8601DateFormatter().string(from: Date())) {
+    public init(playerName: String = defaultPlayerName(), score: Int, level: Int, date: String = ISO8601DateFormatter().string(from: Date())) {
+        self.playerName = playerName
         self.score = score
         self.level = level
         self.date = date
@@ -32,11 +34,11 @@ public final class ScoreStorage: Sendable {
 
     /// Saves a new score then keeps only the top 10.
     @discardableResult
-    public func add(score: Int, level: Int) -> [StoredScore] {
+    public func add(score: Int, level: Int, playerName: String = defaultPlayerName()) -> [StoredScore] {
         lock.lock()
         defer { lock.unlock() }
-        let newEntry = StoredScore(score: score, level: level)
-        guard !loadScoresPrivate().contains(where: { $0.score == score && $0.level == level }) else {
+        let newEntry = StoredScore(playerName: playerName, score: score, level: level)
+        guard !loadScoresPrivate().contains(where: { $0.score == score && $0.playerName == playerName && $0.level == level }) else {
             return loadScoresPrivate()
         }
         var scores = loadScoresPrivate()
@@ -74,7 +76,43 @@ public final class ScoreStorage: Sendable {
             let data = try JSONEncoder().encode(scores)
             try data.write(to: filePath, options: .atomic)
         } catch {
-            // Best-effort persistence – silent fail
+            // Best-effort persistence - silent fail
         }
+    }
+}
+
+// MARK: - Player name storage
+
+private let appSettingsPath: URL = {
+    let dir = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent(".tetris")
+    return dir.appendingPathComponent("settings.json")
+}()
+
+public func defaultPlayerName() -> String {
+    if let data = try? Data(contentsOf: appSettingsPath),
+       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+       let name = json["playerName"] as? String, !name.isEmpty {
+        return name
+    }
+    return NSUserName()
+}
+
+public func storePlayerName(_ name: String) {
+    var settings: [String: Any] = [:]
+    if let data = try? Data(contentsOf: appSettingsPath),
+       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+        settings = json
+    }
+    settings["playerName"] = name
+    do {
+        try FileManager.default.createDirectory(
+            at: appSettingsPath.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let data = try JSONSerialization.data(withJSONObject: settings, options: [.sortedKeys])
+        try data.write(to: appSettingsPath, options: .atomic)
+    } catch {
+        // Best-effort - silent fail
     }
 }

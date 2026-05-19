@@ -17,6 +17,7 @@ public struct GameSessionState {
     public let level: Int
     public let state: GameState
     public let topScores: [StoredScore]
+    public let playerName: String
 
     public init(
         grid: [[BlockState]],
@@ -25,7 +26,8 @@ public struct GameSessionState {
         score: Int,
         level: Int,
         state: GameState,
-        topScores: [StoredScore] = []
+        topScores: [StoredScore] = [],
+        playerName: String = defaultPlayerName()
     ) {
         self.grid = grid
         self.pieceBlocks = pieceBlocks
@@ -34,5 +36,6 @@ public struct GameSessionState {
         self.level = level
         self.state = state
         self.topScores = topScores
+        self.playerName = playerName
     }
 }
