@@ -5,9 +5,11 @@ import Model
 
 public final class ConsoleGameUI: @unchecked Sendable {
     private var input: ConsoleInputHandler?
+    private let logger: GameLogger
 
-    public init() {
+    public init(logger: GameLogger = GameLogger()) {
         self.input = ConsoleInputHandler()
+        self.logger = logger
     }
 
     public func run() async {
@@ -23,6 +25,7 @@ public final class ConsoleGameUI: @unchecked Sendable {
         let doneSemaphore = DispatchSemaphore(value: 0)
 
         gameController = GameController(
+            logger: logger,
             onRender: { state in
                 let output = renderer.render(data: state)
                 print(output, terminator: "")

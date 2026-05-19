@@ -94,7 +94,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         }
 
         if data.state == .gameOver {
-            let overlay = renderGameOverOverlay(score: data.score, level: data.level, terminalSize: size)
+            let overlay = renderGameOverOverlay(score: data.score, level: data.level, topScores: data.topScores, terminalSize: size)
             output += overlay
         } else {
             output += terminal.cursorPosition(row: startRow + height + 3, col: centerColumn(for: scoreText))
@@ -179,17 +179,30 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
     private func renderGameOverOverlay(
         score: Int,
         level: Int,
+        topScores: [Model.StoredScore],
         terminalSize: (rows: Int, cols: Int)
     ) -> String {
+        var lines: [OverlayLine] = [
+            OverlayLine.colored("GAME OVER", .red),
+            OverlayLine.plain(String(format: "Score: %d", score)),
+            OverlayLine.plain(String(format: "Level: %d", level)),
+        ]
+
+        if !topScores.isEmpty {
+            lines.append(OverlayLine.plain(""))
+            lines.append(OverlayLine.colored("Top Scores", .yellow))
+            for (i, entry) in topScores.enumerated() {
+                lines.append(OverlayLine.plain(
+                    String(format: "%d. %d  (lvl %d)", i + 1, entry.score, entry.level)))
+            }
+        }
+
+        lines.append(OverlayLine.plain(""))
+        lines.append(OverlayLine.plain("Press SPACE for new game"))
+        lines.append(OverlayLine.plain("Press ESC to exit"))
+
         return renderOverlay(
-            lines: [
-                OverlayLine.colored("GAME OVER", .red),
-                OverlayLine.plain(String(format: "Score: %d", score)),
-                OverlayLine.plain(String(format: "Level: %d", level)),
-                OverlayLine.plain(""),
-                OverlayLine.plain("Press SPACE for new game"),
-                OverlayLine.plain("Press ESC to exit"),
-            ],
+            lines: lines,
             centeredIn: (row: 1, col: 1, height: terminalSize.rows, width: terminalSize.cols)
         )
     }

@@ -28,6 +28,8 @@ public actor GameController: InputReceiver {
             case .gameOver:
                 stopDropTimer()
                 stopLockTimer()
+                log.log("[Score] Saving score=\(score) level=\(level)")
+                scoreStorage.add(score: score, level: level)
             default: break
             }
         }
@@ -49,6 +51,10 @@ public actor GameController: InputReceiver {
 
     private let log: GameLogger
 
+    // MARK: - Score Storage
+
+    private let scoreStorage: ScoreStorage
+
     // MARK: - Callbacks
 
     private let onRender: @Sendable (GameSessionState) -> Void
@@ -56,10 +62,12 @@ public actor GameController: InputReceiver {
 
     public init(
         logger: GameLogger = GameLogger(),
+        scoreStorage: ScoreStorage = ScoreStorage(),
         onRender: @escaping @Sendable (GameSessionState) -> Void,
         onGameFinished: @escaping @Sendable () -> Void
     ) {
         self.log = logger
+        self.scoreStorage = scoreStorage
         self.onRender = onRender
         self.onGameFinished = onGameFinished
         self.grid = Array(repeating: Array(repeating: .empty, count: width), count: height)
@@ -359,7 +367,8 @@ public actor GameController: InputReceiver {
                 nextPieceBlocks: nextPieceBlocks,
                 score: score,
                 level: level,
-                state: state
+                state: state,
+                topScores: scoreStorage.topScores()
             ))
     }
 
