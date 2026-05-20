@@ -243,29 +243,17 @@ Note: Coordinates are relative to the grid for `pieceBlocks` and relative to the
 
 ---
 
-### `GameState`
+### `GameDisplayState`
+
+Consumer-facing game state. Internal timer states like `.dropping` and `.locking` are collapsed into `.playing`.
 
 ```swift
-public enum GameState: CustomStringConvertible, Sendable {
-    case initializing
-    case dropping     // Piece is falling
-    case locking      // Piece has landed, lock delay active
-    case paused
-    case gameOver
+public enum GameDisplayState: Sendable {
+    case playing   // Game is active — render the board and accept input
+    case paused    // Game is paused — show a pause overlay
+    case gameOver  // Game is over — show score summary
 }
 ```
-
-**Valid transitions:**
-
-```
-initializing ──> dropping
-dropping ──> locking, paused, gameOver, dropping (self)
-locking ──> dropping, gameOver
-paused ──> dropping, gameOver
-gameOver ──> initializing
-```
-
-The `.dropping → .dropping` self-transition re-triggers the drop timer lifecycle after each tick. Invalid transitions are silently rejected with a debug log message.
 
 ---
 

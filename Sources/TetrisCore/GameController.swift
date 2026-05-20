@@ -119,6 +119,15 @@ public actor GameController: InputReceiver {
         max(0.15, 0.8 - Double(level - 1) * 0.06)
     }
 
+    /// Consumer-facing state — collapses internal timer states into `.playing`.
+    private var displayState: GameDisplayState {
+        switch state {
+        case .dropping, .locking, .initializing: return .playing
+        case .paused: return .paused
+        case .gameOver: return .gameOver
+        }
+    }
+
     // MARK: - Lifecycle
 
     private var dropTimer: Task<Void, Never>?
@@ -387,7 +396,7 @@ public actor GameController: InputReceiver {
                 score: score,
                 level: level,
                 linesCleared: linesCleared,
-                state: state,
+                state: displayState,
                 topScores: scoreStorage.topScores(),
                 playerName: playerName
             ))

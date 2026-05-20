@@ -1,4 +1,4 @@
-public enum GameState: CustomStringConvertible, Sendable {
+enum GameState: CustomStringConvertible, Sendable {
     case initializing
     case dropping
     case locking

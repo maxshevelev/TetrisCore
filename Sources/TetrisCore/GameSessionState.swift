@@ -16,7 +16,7 @@ public struct GameSessionState {
     public let score: Int
     public let level: Int
     public let linesCleared: Int
-    public let state: GameState
+    public let state: GameDisplayState
     public let topScores: [StoredScore]
     public let playerName: String
 
@@ -27,7 +27,7 @@ public struct GameSessionState {
         score: Int,
         level: Int,
         linesCleared: Int,
-        state: GameState,
+        state: GameDisplayState,
         topScores: [StoredScore] = [],
         playerName: String = defaultPlayerName()
     ) {

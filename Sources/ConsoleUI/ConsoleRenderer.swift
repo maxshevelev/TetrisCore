@@ -72,12 +72,8 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         let scoreText = "Score: \(data.score)  Level: \(data.level)"
         let statusText: String
         switch data.state {
-        case .initializing:
-            statusText = "Initializing..."
-        case .dropping:
+        case .playing:
             statusText = "Lines: \(data.linesCleared)"
-        case .locking:
-            statusText = "Locking piece..."
         case .paused:
             statusText = "PAUSED - Press ESC to resume"
         case .gameOver:
