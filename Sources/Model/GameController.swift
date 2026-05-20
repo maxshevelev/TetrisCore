@@ -13,6 +13,15 @@ public actor GameController: InputReceiver {
     private let height = 20
     private let lockDelay: TimeInterval = 0.5
 
+    /// All valid state transitions. Any transition not in this table is silently rejected.
+    private static let validTransitions: [GameState: Set<GameState>] = [
+        .initializing: [.dropping],
+        .dropping: [.locking, .paused, .gameOver, .dropping],
+        .locking: [.dropping, .gameOver],
+        .paused: [.dropping, .gameOver],
+        .gameOver: [.initializing],
+    ]
+
     // MARK: - State
 
     private var state: GameState = .initializing {
@@ -38,6 +47,16 @@ public actor GameController: InputReceiver {
             default: break
             }
         }
+    }
+
+    /// Transition to `newState` only if the transition is valid.
+    /// Invalid transitions are silently rejected with a debug log.
+    private func transition(to newState: GameState) {
+        guard let allowed = Self.validTransitions[state], allowed.contains(newState) else {
+            log(.debug,"[State] Invalid transition: \(state) -> \(newState), blocked")
+            return
+        }
+        state = newState
     }
 
     private var grid: [[BlockState]]
@@ -112,9 +131,9 @@ public actor GameController: InputReceiver {
             guard state == .dropping else { return }
             if canMoveDownPrivate() {
                 currentY += 1
-                state = .dropping
+                transition(to: .dropping)
             } else {
-                state = .locking
+                transition(to: .locking)
             }
             render()
         }
@@ -136,7 +155,7 @@ public actor GameController: InputReceiver {
                 clearLinesPrivate()
                 spawnNewPiece()
             }
-            state = .dropping
+            transition(to: .dropping)
             render()
         }
     }
@@ -160,7 +179,7 @@ public actor GameController: InputReceiver {
         log(.debug,"[LifeCycle] Game started")
         render()
         startInputListener()
-        state = .dropping
+        transition(to: .dropping)
     }
 
     private func resetGame() {
@@ -178,7 +197,8 @@ public actor GameController: InputReceiver {
     private func restart() {
         log(.debug,"[LifeCycle] Game restarted")
         resetGame()
-        state = .dropping
+        transition(to: .initializing)
+        transition(to: .dropping)
         render()
     }
 
@@ -222,9 +242,9 @@ public actor GameController: InputReceiver {
                 case .esc:
                     log(.debug,"[Input] esc")
                     if isPlaying {
-                        state = .paused
+                        transition(to: .paused)
                     } else if state == .paused {
-                        state = .dropping
+                        transition(to: .dropping)
                     } else if state == .gameOver {
                         finish()
                         return // and finish the input listener task
@@ -233,7 +253,7 @@ public actor GameController: InputReceiver {
                     }
                 case .quit:
                     log(.debug,"[Input] quit")
-                    state = .gameOver
+                    transition(to: .gameOver)
                 }
                 render()
             }
@@ -272,7 +292,7 @@ public actor GameController: InputReceiver {
     public func hardDropPiece() {
         guard isPlaying else { return }
         while canMoveDownPrivate() { currentY += 1 }
-        state = .locking
+        transition(to: .locking)
     }
 
     private func canMoveDownPrivate() -> Bool {
@@ -334,7 +354,7 @@ public actor GameController: InputReceiver {
             log(.debug,"[Piece] Spawned \([currentPiece!.shape.rawValue])")
             if isColliding() {
                 log(.debug,"[GameOver] Score: \(score) Lines: \(linesCleared)")
-                state = .gameOver
+                transition(to: .gameOver)
             }
         }
         spawnNextPiece()
