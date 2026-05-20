@@ -326,15 +326,12 @@ public actor GameController: InputReceiver {
                 linesToClear.append(y)
             }
         }
-        for y in linesToClear.sorted() {
-            grid.remove(at: y)
-            grid.insert(Array(repeating: .empty, count: width), at: 0)
-            score += 100
-            linesCleared += 1
-        }
-        if !linesToClear.isEmpty {
-            logDebug("[Lines] Cleared \([linesToClear.count]) line(s), score=\(score) total_lines=\(linesCleared)")
-        }
+        let count = linesToClear.count
+        if count == 0 { return }
+        let baseScores: [Int: Int] = [1: 40, 2: 100, 3: 300, 4: 1200]
+        score += baseScores[count, default: 0] * (level + 1)
+        linesCleared += count
+        logDebug("[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared)")
     }
 
     private func spawnNextPiece() {
