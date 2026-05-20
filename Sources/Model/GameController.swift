@@ -21,10 +21,10 @@ public actor GameController: InputReceiver {
             switch state {
             case .dropping:
                 stopLockTimer()
-                makeDropTimer()
+                resetDropTimer()
             case .locking:
                 stopDropTimer()
-                makeLockTimer()
+                resetLockTimer()
             case .paused:
                 stopDropTimer()
                 stopLockTimer()
@@ -105,9 +105,10 @@ public actor GameController: InputReceiver {
     private var dropTimer: Task<Void, Never>?
     private var lockTimer: Task<Void, Never>?
 
-    private func createDropTimer(interval: TimeInterval) -> Task<Void, Never> {
-        Task {
-            try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+    private func resetDropTimer() {
+        dropTimer?.cancel()
+        dropTimer = Task {
+            try? await Task.sleep(nanoseconds: UInt64(dropInterval * 1_000_000_000))
             guard state == .dropping else { return }
             if canMoveDownPrivate() {
                 currentY += 1
@@ -117,11 +118,7 @@ public actor GameController: InputReceiver {
             }
             render()
         }
-    }
 
-    private func makeDropTimer() {
-        dropTimer?.cancel()
-        dropTimer = createDropTimer(interval: dropInterval)
     }
 
     private func stopDropTimer() {
@@ -129,9 +126,10 @@ public actor GameController: InputReceiver {
         dropTimer = nil
     }
 
-    private func createLockTimer(interval: TimeInterval) -> Task<Void, Never> {
-        Task {
-            try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+    private func resetLockTimer() {
+        lockTimer?.cancel()
+        lockTimer = Task {
+            try? await Task.sleep(nanoseconds: UInt64(lockDelay * 1_000_000_000))
             guard state == .locking else { return }
             if !canMoveDownPrivate() {
                 lockPiecePrivate()
@@ -146,11 +144,6 @@ public actor GameController: InputReceiver {
     private func stopLockTimer() {
         lockTimer?.cancel()
         lockTimer = nil
-    }
-
-    private func makeLockTimer() {
-        lockTimer?.cancel()
-        lockTimer = createLockTimer(interval: lockDelay)
     }
 
     private func log(_ level: LogLevel, _ message: String) {
