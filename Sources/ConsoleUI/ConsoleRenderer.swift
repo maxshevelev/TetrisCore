@@ -42,18 +42,18 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             output += terminal.bold + "║" + terminal.reset
             for x in 0..<width {
                 let currentCell = data.grid[y][x]
-                let palette: ColorPalette?
+                let paletteColor: ColorPalette?
 
                 if currentCell.isFilled {
-                    palette = currentCell.color.map(ColorPalette.from)
+                    paletteColor = currentCell.color.map(ColorPalette.from)
                 } else if let block = data.pieceBlocks.first(where: { $0.x == x && $0.y == y }) {
-                    palette = ColorPalette.from(block.color)
+                    paletteColor = ColorPalette.from(block.color)
                 } else {
-                    palette = nil
+                    paletteColor = nil
                 }
 
-                if let palette {
-                    output += palette.ansiCode + "██" + terminal.reset
+                if let paletteColor {
+                    output += paletteColor.ansiCode + "██" + terminal.reset
                 } else {
                     output += "· "
                 }
