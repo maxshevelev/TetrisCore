@@ -42,16 +42,18 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             output += terminal.bold + "║" + terminal.reset
             for x in 0..<width {
                 let currentCell = data.grid[y][x]
-                var color: TetrominoColor?
+                let palette: ColorPalette?
 
                 if currentCell.isFilled {
-                    color = currentCell.color
+                    palette = currentCell.color.map(ColorPalette.from)
                 } else if let block = data.pieceBlocks.first(where: { $0.x == x && $0.y == y }) {
-                    color = block.color
+                    palette = ColorPalette.from(block.color)
+                } else {
+                    palette = nil
                 }
 
-                if let color = color {
-                    output += color.ansiCode + "██" + terminal.reset
+                if let palette {
+                    output += palette.ansiCode + "██" + terminal.reset
                 } else {
                     output += "· "
                 }
@@ -106,7 +108,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             // Status line
             output += terminal.cursorPosition(row: startRow + height + 6, col: centerColumn(for: statusText))
             if data.state == .paused {
-                output += terminal.bold + TetrominoColor.red.ansiCode + statusText + terminal.reset
+                output += terminal.bold + ColorPalette.red.ansiCode + statusText + terminal.reset
             } else {
                 output += statusText
             }
@@ -119,7 +121,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
                     output += terminal.cursorPosition(row: startRow + y + 2, col: nextCol)
                     for x in 0..<4 {
                         if let block = data.nextPieceBlocks.first(where: { $0.x == x && $0.y == y }) {
-                            output += block.color.ansiCode + "██" + terminal.reset
+                            output += ColorPalette.from(block.color).ansiCode + "██" + terminal.reset
                         } else {
                             output += "  "
                         }
@@ -142,19 +144,18 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
     // MARK: - Overlay
 
     enum Alignment { case leading, center, trailing }
-    enum LineColor { case `none`, color(TetrominoColor) }
 
     struct OverlayLine {
         let text: String
         let alignment: Alignment
-        let color: TetrominoColor?
+        let color: ColorPalette?
         let isBold: Bool
 
-        static func plain(_ text: String, bold: Bool = false, color: TetrominoColor? = nil) -> OverlayLine {
+        static func plain(_ text: String, bold: Bool = false, color: ColorPalette? = nil) -> OverlayLine {
             OverlayLine(text: text, alignment: .center, color: color, isBold: bold)
         }
 
-        static func bold(_ text: String, color: TetrominoColor? = nil) -> OverlayLine {
+        static func bold(_ text: String, color: ColorPalette? = nil) -> OverlayLine {
             OverlayLine(text: text, alignment: .center, color: color, isBold: true)
         }
     }
