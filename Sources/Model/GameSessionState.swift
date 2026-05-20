@@ -15,6 +15,7 @@ public struct GameSessionState {
     public let nextPieceBlocks: [PieceBlock]
     public let score: Int
     public let level: Int
+    public let linesCleared: Int
     public let state: GameState
     public let topScores: [StoredScore]
     public let playerName: String
@@ -25,6 +26,7 @@ public struct GameSessionState {
         nextPieceBlocks: [PieceBlock],
         score: Int,
         level: Int,
+        linesCleared: Int,
         state: GameState,
         topScores: [StoredScore] = [],
         playerName: String = defaultPlayerName()
@@ -34,6 +36,7 @@ public struct GameSessionState {
         self.nextPieceBlocks = nextPieceBlocks
         self.score = score
         self.level = level
+        self.linesCleared = linesCleared
         self.state = state
         self.topScores = topScores
         self.playerName = playerName

@@ -381,6 +381,7 @@ public actor GameController: InputReceiver {
                 nextPieceBlocks: nextPieceBlocks,
                 score: score,
                 level: level,
+                linesCleared: linesCleared,
                 state: state,
                 topScores: scoreStorage.topScores(),
                 playerName: playerName

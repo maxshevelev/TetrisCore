@@ -25,8 +25,6 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         let startRow = padTop + 1
         let startCol = padLeft + 1
         let nextCol = max(1, startCol - 12)
-        let dropInterval = max(0.15, 0.8 - Double(data.level - 1) * 0.06)
-
         var output = terminal.home + terminal.eraseDown
 
         // Player name above grid
@@ -75,7 +73,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         case .initializing:
             statusText = "Initializing..."
         case .dropping:
-            statusText = "Drop: \(String(format: "%.2fs", dropInterval))"
+            statusText = "Lines: \(data.linesCleared)"
         case .locking:
             statusText = "Locking piece..."
         case .paused:
