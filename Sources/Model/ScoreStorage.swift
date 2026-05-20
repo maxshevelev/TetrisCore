@@ -6,13 +6,11 @@ public struct StoredScore: Codable, Equatable {
     public let playerName: String
     public let score: Int
     public let level: Int
-    public let date: String
 
-    public init(playerName: String = defaultPlayerName(), score: Int, level: Int, date: String = ISO8601DateFormatter().string(from: Date())) {
+    public init(playerName: String = defaultPlayerName(), score: Int, level: Int) {
         self.playerName = playerName
         self.score = score
         self.level = level
-        self.date = date
     }
 }
 
