@@ -26,14 +26,14 @@ public actor GameController: InputReceiver {
 
     private var state: GameState = .initializing {
         didSet {
-            logDebug("[State] \(oldValue) -> \(state)")
+            log(.debug,"[State] \(oldValue) -> \(state)")
             switch state {
             case .dropping:
                 stopLockTimer()
-                makeDropTimer()
+                resetDropTimer()
             case .locking:
                 stopDropTimer()
-                makeLockTimer()
+                resetLockTimer()
             case .paused:
                 stopDropTimer()
                 stopLockTimer()
@@ -41,7 +41,7 @@ public actor GameController: InputReceiver {
                 stopDropTimer()
                 stopLockTimer()
                 if oldValue != .gameOver {
-                    logDebug("[Score] Saving score=\(score) level=\(level) player=\(playerName)")
+                    log(.debug,"[Score] Saving score=\(score) level=\(level) player=\(playerName)")
                     scoreStorage.add(score: score, level: level, playerName: playerName)
                 }
             default: break
@@ -53,7 +53,7 @@ public actor GameController: InputReceiver {
     /// Invalid transitions are silently rejected with a debug log.
     private func transition(to newState: GameState) {
         guard let allowed = Self.validTransitions[state], allowed.contains(newState) else {
-            logDebug("[State] Invalid transition: \(state) -> \(newState), blocked")
+            log(.debug,"[State] Invalid transition: \(state) -> \(newState), blocked")
             return
         }
         state = newState
@@ -124,9 +124,10 @@ public actor GameController: InputReceiver {
     private var dropTimer: Task<Void, Never>?
     private var lockTimer: Task<Void, Never>?
 
-    private func createDropTimer(interval: TimeInterval) -> Task<Void, Never> {
-        Task {
-            try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+    private func resetDropTimer() {
+        dropTimer?.cancel()
+        dropTimer = Task {
+            try? await Task.sleep(nanoseconds: UInt64(dropInterval * 1_000_000_000))
             guard state == .dropping else { return }
             if canMoveDownPrivate() {
                 currentY += 1
@@ -136,11 +137,7 @@ public actor GameController: InputReceiver {
             }
             render()
         }
-    }
 
-    private func makeDropTimer() {
-        dropTimer?.cancel()
-        dropTimer = createDropTimer(interval: dropInterval)
     }
 
     private func stopDropTimer() {
@@ -148,9 +145,10 @@ public actor GameController: InputReceiver {
         dropTimer = nil
     }
 
-    private func createLockTimer(interval: TimeInterval) -> Task<Void, Never> {
-        Task {
-            try? await Task.sleep(nanoseconds: UInt64(interval * 1_000_000_000))
+    private func resetLockTimer() {
+        lockTimer?.cancel()
+        lockTimer = Task {
+            try? await Task.sleep(nanoseconds: UInt64(lockDelay * 1_000_000_000))
             guard state == .locking else { return }
             if !canMoveDownPrivate() {
                 lockPiecePrivate()
@@ -167,18 +165,18 @@ public actor GameController: InputReceiver {
         lockTimer = nil
     }
 
-    private func makeLockTimer() {
-        lockTimer?.cancel()
-        lockTimer = createLockTimer(interval: lockDelay)
-    }
-
-    private func logDebug(_ message: String) {
-        guard let minLogLevel, minLogLevel.allows(.debug) else { return }
-        log.debug("\(message, privacy: .public)")
+    private func log(_ level: LogLevel, _ message: String) {
+        guard let minLogLevel, minLogLevel.allows(level) else { return }
+        switch level {
+        case .debug:    log.debug("\(message, privacy: .public)")
+        case .info, .notice: log.info("\(message, privacy: .public)")
+        case .error:    log.error("\(message, privacy: .public)")
+        case .fault:    log.fault("\(message, privacy: .public)")
+        }
     }
 
     public func start() {
-        logDebug("[LifeCycle] Game started")
+        log(.debug,"[LifeCycle] Game started")
         render()
         startInputListener()
         transition(to: .dropping)
@@ -197,7 +195,7 @@ public actor GameController: InputReceiver {
     }
 
     private func restart() {
-        logDebug("[LifeCycle] Game restarted")
+        log(.debug,"[LifeCycle] Game restarted")
         resetGame()
         transition(to: .initializing)
         transition(to: .dropping)
@@ -214,19 +212,6 @@ public actor GameController: InputReceiver {
         (state == .dropping || state == .locking)
     }
 
-    public func awaitInput() async -> String {
-        let keyEvent = await inputBuffer.receive()
-        // Convert key event to string representation
-        switch keyEvent {
-        case .moveLeft: return "left"
-        case .moveRight: return "right"
-        case .rotate: return "rotate"
-        case .hardDrop: return "drop"
-        case .esc: return "esc"
-        case .quit: return "q"
-        }
-    }
-
     private func startInputListener() {
         Task {
             while true {
@@ -234,19 +219,19 @@ public actor GameController: InputReceiver {
 
                 switch keyEvent {
                 case .moveLeft:
-                    logDebug("[Input] move_left at x=\(currentX)")
+                    log(.debug,"[Input] move_left at x=\(currentX)")
                     guard isPlaying else { continue }
                     moveLeft()
                 case .moveRight:
-                    logDebug("[Input] move_right at x=\(currentX)")
+                    log(.debug,"[Input] move_right at x=\(currentX)")
                     guard isPlaying else { continue }
                     moveRight()
                 case .rotate:
-                    logDebug("[Input] rotate")
+                    log(.debug,"[Input] rotate")
                     guard isPlaying else { continue }
                     rotatePiece()
                 case .hardDrop:
-                    logDebug("[Input] hard_drop at y=\(currentY)")
+                    log(.debug,"[Input] hard_drop at y=\(currentY)")
                     if isPlaying {
                         hardDropPiece()
                     } else if state == .gameOver {
@@ -255,7 +240,7 @@ public actor GameController: InputReceiver {
                         continue
                     }
                 case .esc:
-                    logDebug("[Input] esc")
+                    log(.debug,"[Input] esc")
                     if isPlaying {
                         transition(to: .paused)
                     } else if state == .paused {
@@ -267,7 +252,7 @@ public actor GameController: InputReceiver {
                         continue
                     }
                 case .quit:
-                    logDebug("[Input] quit")
+                    log(.debug,"[Input] quit")
                     transition(to: .gameOver)
                 }
                 render()
@@ -332,7 +317,7 @@ public actor GameController: InputReceiver {
 
     private func lockPiecePrivate() {
         guard let piece = currentPiece else { return }
-        logDebug("[Piece] Locked \([piece.shape.rawValue]) at (\(currentX),\(currentY))")
+        log(.debug,"[Piece] Locked \([piece.shape.rawValue]) at (\(currentX),\(currentY))")
         for (x, y) in piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY) {
             if y >= 0 && x >= 0 && x < width && y < height {
                 grid[y][x] = .filled(piece.shape.blockColor)
@@ -347,7 +332,7 @@ public actor GameController: InputReceiver {
         if count == 0 { return }
         score += Self.baseScores[count, default: 0] * (level + 1)
         linesCleared += count
-        logDebug("[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared)")
+        log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared)")
         // Remove from bottom to top so indices stay valid
         for y in linesToClear.reversed() {
             grid.remove(at: y)
@@ -366,9 +351,9 @@ public actor GameController: InputReceiver {
         if currentPiece != nil {
             currentX = width / 2 - 2
             currentY = 0
-            logDebug("[Piece] Spawned \([currentPiece!.shape.rawValue])")
+            log(.debug,"[Piece] Spawned \([currentPiece!.shape.rawValue])")
             if isColliding() {
-                logDebug("[GameOver] Score: \(score) Lines: \(linesCleared)")
+                log(.debug,"[GameOver] Score: \(score) Lines: \(linesCleared)")
                 transition(to: .gameOver)
             }
         }

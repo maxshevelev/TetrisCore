@@ -17,13 +17,4 @@ public enum LogLevel: String, CaseIterable, Sendable {
         self.order <= level.order
     }
 
-    public var osLogType: OSLogType {
-        switch self {
-        case .debug: return .debug
-        case .info: return .info
-        case .notice: return .default
-        case .error: return .error
-        case .fault: return .fault
-        }
-    }
 }
