@@ -274,9 +274,11 @@ public actor GameController: InputReceiver {
     public func rotatePiece() {
         guard isPlaying else { return }
         guard let piece = currentPiece else { return }
-        piece.rotate()
+        let rotated = piece.rotated(by: -1)
+        let oldPiece = currentPiece
+        currentPiece = rotated
         if isColliding() {
-            piece.rotateBack()
+            currentPiece = oldPiece
         }
     }
 

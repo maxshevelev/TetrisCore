@@ -2,7 +2,7 @@
 
 import Foundation
 
-public enum TetrominoShape: String {
+public enum TetrominoShape: String, Sendable {
     case I, O, T, S, Z, J, L
 
     public var blockColor: TetrominoColor {
@@ -61,39 +61,24 @@ public enum TetrominoShape: String {
     }
 }
 
-public class Tetromino {
+public struct Tetromino: Sendable {
     public let shape: TetrominoShape
-    private var _rotationIndex = 0
+    private let rotationIndex: Int
 
-    public init(shape: TetrominoShape) {
+    public init(shape: TetrominoShape, rotationIndex: Int = 0) {
         self.shape = shape
-    }
-
-    var rotationIndex: Int {
-        (_rotationIndex % shape.blocks.count + shape.blocks.count) % shape.blocks.count
+        self.rotationIndex = rotationIndex
     }
 
     public var blocks: [[Int]] {
-        shape.blocks[rotationIndex]
+        shape.blocks[(rotationIndex % shape.blocks.count + shape.blocks.count) % shape.blocks.count]
     }
 
     public func getAbsoluteCoordinates(xOffset: Int, yOffset: Int) -> [(x: Int, y: Int)] {
-        return blocks.map { block in
-            (x: xOffset + block[0], y: yOffset + block[1])
-        }
+        blocks.map { (x: xOffset + $0[0], y: yOffset + $0[1]) }
     }
 
-    public func rotate() {
-        _rotationIndex -= 1
-    }
-
-    public func rotateBack() {
-        _rotationIndex += 1
-    }
-
-    public func clone() -> Tetromino {
-        let clone = Tetromino(shape: shape)
-        clone._rotationIndex = _rotationIndex
-        return clone
+    public func rotated(by offset: Int) -> Tetromino {
+        Tetromino(shape: shape, rotationIndex: rotationIndex + offset)
     }
 }

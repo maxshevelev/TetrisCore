@@ -77,9 +77,8 @@ func moveRight_doesNotMoveIntoWall() async {
 func rotate_rotatesPiece() async {
     let piece = Tetromino(shape: .I)
     let initialCoordinates = piece.getAbsoluteCoordinates(xOffset: 0, yOffset: 0)
-
-    piece.rotate()
-    let rotatedCoordinates = piece.getAbsoluteCoordinates(xOffset: 0, yOffset: 0)
+    let rotated = piece.rotated(by: -1)
+    let rotatedCoordinates = rotated.getAbsoluteCoordinates(xOffset: 0, yOffset: 0)
 
     // I piece rotates from horizontal to vertical - coordinates change
     #expect(!initialCoordinates.elementsEqual(rotatedCoordinates, by: ==))
@@ -87,18 +86,16 @@ func rotate_rotatesPiece() async {
 
 @Test("rotatePiece undo rotation when colliding")
 func rotate_doesNotRotateWhenColliding() async {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
-    var piece = Tetromino(shape: .T)
+    let grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    let piece = Tetromino(shape: .T)
     let currentX = 5
     let currentY = 18
 
     let originalCoordinates = piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY)
-    piece.rotate()
-    if isColliding(grid: grid, piece: piece, x: currentX, y: currentY) {
-        piece.rotateBack()
-    }
-
-    let finalCoordinates = piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY)
+    let rotated = piece.rotated(by: -1)
+    let finalCoordinates = isColliding(grid: grid, piece: rotated, x: currentX, y: currentY)
+        ? originalCoordinates
+        : rotated.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY)
     #expect(originalCoordinates.elementsEqual(finalCoordinates, by: ==))
 }
 
