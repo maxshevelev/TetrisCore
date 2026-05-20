@@ -9,39 +9,47 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 - **Actor-based** `GameController` for concurrent, data-race-free game state
 - **Event-driven** input via `InputReceiver` protocol + `InputBuffer`
 - **Virtual grid rendering** with ANSI escape sequences, centered on terminal
-- **Persistent score storage** in `~/.tetris/scores.json` (top 10, JSON-backed)
-- **Optional debug logging** via `-d` flag with log level (debug, info, notice, error, fault), uses Apple `os.Logger`
+- **Persistent score storage** in `~/.tetris/scores.json` (top 10, JSON-backed) — no date field
+- **Optional debug logging** via `-d` flag with log level (debug, info, notice, error, fault), uses Apple `os.Logger` — all logs use `privacy: .public`
 - **Optional player name** via `-u, --user` flag, persisted in `~/.tetris/settings.json`, defaults to Unix username
+- **Color abstraction**: `TetrominoColor` (Model) → `ColorPalette` (ConsoleUI) for ANSI mapping
 
 ## Key Files & Responsibilities
 
 | File | Role |
 |------|------|
 | `Sources/tetris/Main.swift` | Entry point, ArgumentParser CLI, wires logger + UI |
-| `Sources/Model/GameController.swift` | Actor: game loop, input handling, state machine, scoring |
-| `Sources/Model/LogLevel.swift` | Log level enum for `os.Logger` gating |
+| `Sources/Model/GameController.swift` | Actor: game loop, input handling, state machine, scoring, `log` method |
+| `Sources/Model/LogLevel.swift` | Log level enum — `allows` gates messages, used by `log(level, .)` |
+| `Sources/ConsoleUI/ColorPalette.swift` | ANSI color palette, maps `TetrominoColor` → `ColorPalette` |
 | `Sources/Model/ScoreStorage.swift` | JSON persistence for top-10 scores, thread-safe |
 | `Sources/Model/GameSessionState.swift` | Immutable snapshot passed to renderer |
 | `Sources/ConsoleUI/ConsoleRenderer.swift` | Virtual grid → ANSI, overlay system with `OverlayLine` |
 | `Sources/ConsoleUI/ConsoleGameUI.swift` | Facade: adapter pattern, lifecycle management |
 | `Sources/ConsoleUI/TerminalAdapter.swift` | Terminal operations abstraction |
-| `Sources/Model/Tetromino.swift` | Shape definitions, rotation, block coordinates |
+| `Sources/Model/Tetromino.swift` | Shape definitions, rotation (`rotated(by:)`), block coordinates — immutable struct |
 | `Sources/Model/BlockState.swift` | `empty` / `filled(TetrominoColor)` enum |
 
 ## Conventions & Constraints
 
-- Game logic in `Model` is UI-agnostic
+- Game logic in `Model` is UI-agnostic; colors use `TetrominoColor`, rendering uses `ColorPalette`
 - Actor isolation for `GameController`; `@Sendable` closures for callbacks
-- Overlay uses `OverlayLine` with `plain`/`bold` factories, optional color
+- All log messages use `privacy: .public` — never hide logs from the user
+- Overlay uses `OverlayLine` with `plain`/`bold` factories, optional `ColorPalette` color
 - Grid rendering: virtual buffer → centered ANSI output
+- Scoring: classical Tetris formula (40/100/300/1200 base, multiplied by level+1)
 - Soft drop with lock delay (0.5s), piece movement resets timer
-- Scores deduplicated on save; top 10 kept by score descending
-- Debug logging gated by `LogLevel`; `-d` sets the minimum level, messages below are suppressed
+- `Tetromino` is an immutable `Sendable` struct — use `rotated(by:)`, never mutate in place
+- `LogLevel` gates messages via `allows` — a level X permits messages at level X or higher
+- `GameState`, `TetrominoColor`, `Tetromino`, `TetrominoShape`, `ColorPalette` are all `Sendable`
 
 ## Active Tasks & Status
 
-- ✅ ArgumentParser integration — `-d` / `--debug` flag working
-- ✅ Score table with persistent JSON storage and game-over overlay
-- ✅ Player name via `-u, --user` with `~/.tetris/settings.json` persistence
-- ✅ Debug logging via `os.Logger` with `LogLevel` gating (`-d debug|info|notice|error|fault`)
-- ✅ OverlayLine refactored with `bold` factory and optional color
+- ✅ ArgumentParser integration — `-d` / `--user` flags working
+- ✅ Score table with persistent JSON storage and game-over overlay — no date field, classical scoring
+- ✅ Color abstraction: `TetrominoColor` (Model) → `ColorPalette` (ConsoleUI)
+- ✅ `Tetromino` immutable struct, `Sendable`
+- ✅ `log(level, message)` — generic log method with `LogLevel` gating
+- ✅ All log messages use `privacy: .public`
+- ✅ Line clearing unit tests added
+- ✅ `awaitInput()` removed (dead code)
