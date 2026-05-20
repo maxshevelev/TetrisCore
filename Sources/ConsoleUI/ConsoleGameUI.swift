@@ -1,7 +1,7 @@
 // ConsoleGameUI.swift - Facade integrating controller, renderer, and input handler
 
 import Foundation
-import Model
+import TetrisCore
 import os
 
 public final class ConsoleGameUI: @unchecked Sendable {

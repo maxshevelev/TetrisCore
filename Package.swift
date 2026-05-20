@@ -6,33 +6,36 @@ import PackageDescription
 let package = Package(
     name: "tetris",
     platforms: [
-        .macOS(.v13)
+        .macOS(.v13),
+        .iOS(.v16),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.7.1"),
     ],
     targets: [
-        // Model: UI-agnostic game logic
+        // TetrisCore: UI-agnostic game engine
         .target(
-            name: "Model"
+            name: "TetrisCore",
+            swiftSettings: [.enableExperimentalFeature("StrictConcurrency")]
         ),
-        // ConsoleUI: Console-based UI implementation (depends on Model)
+        // ConsoleUI: Console-based reference UI implementation (macOS only)
         .target(
             name: "ConsoleUI",
-            dependencies: ["Model"]
+            dependencies: ["TetrisCore"],
+            swiftSettings: [.enableExperimentalFeature("StrictConcurrency")]
         ),
         // Main executable
         .executableTarget(
             name: "tetris",
             dependencies: [
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
-                "Model", "ConsoleUI",
+                "TetrisCore", "ConsoleUI",
             ]
         ),
         // Tests
         .testTarget(
-            name: "ModelTests",
-            dependencies: ["Model"]
+            name: "TetrisCoreTests",
+            dependencies: ["TetrisCore"]
         ),
     ]
 )
