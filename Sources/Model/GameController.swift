@@ -16,7 +16,7 @@ public actor GameController: InputReceiver {
     /// All valid state transitions. Any transition not in this table is silently rejected.
     private static let validTransitions: [GameState: Set<GameState>] = [
         .initializing: [.dropping],
-        .dropping: [.locking, .paused, .gameOver],
+        .dropping: [.locking, .paused, .gameOver, .dropping],
         .locking: [.dropping, .gameOver],
         .paused: [.dropping, .gameOver],
         .gameOver: [.initializing],
@@ -131,7 +131,7 @@ public actor GameController: InputReceiver {
             guard state == .dropping else { return }
             if canMoveDownPrivate() {
                 currentY += 1
-                resetDropTimer()
+                transition(to: .dropping)
             } else {
                 transition(to: .locking)
             }
