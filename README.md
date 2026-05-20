@@ -82,7 +82,7 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/YOUR_USER/tetris", from: "0.1.0"),
+    .package(url: "https://github.com/maxshevelev/VibeTetris", from: "0.1.0"),
 ],
 targets: [
     .target(
@@ -94,7 +94,7 @@ targets: [
 ]
 ```
 
-Or add directly through Xcode: `File → Add Package Dependencies...` → paste the repository URL → select `TetrisCore`.
+Or add directly through Xcode: `File → Add Package Dependencies...` → paste `https://github.com/maxshevelev/VibeTetris` → select `TetrisCore`.
 
 ## API Reference
 
