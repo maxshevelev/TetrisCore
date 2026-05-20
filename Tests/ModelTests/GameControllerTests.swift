@@ -218,6 +218,68 @@ func spawnNewPiece_gameOverOnCollide() async {
     #expect(spawnColliding)
 }
 
+// MARK: - Line Clearing Tests
+
+private func linesClearedIn(_ grid: [[BlockState]]) -> Int {
+    grid.filter { $0.allSatisfy { $0.isFilled } }.count
+}
+
+@Test("no lines cleared when no row is full")
+func clearLines_noLinesCleared() {
+    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    grid[5] = Array(repeating: .filled(.red), count: 9)
+    grid[5][5] = .empty
+
+    #expect(linesClearedIn(grid) == 0)
+}
+
+@Test("single line is cleared when fully filled")
+func clearLines_singleLine() {
+    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    grid[10] = Array(repeating: .filled(.red), count: 10)
+
+    #expect(linesClearedIn(grid) == 1)
+
+    let filledRows = grid.filter { $0.allSatisfy { $0.isFilled } }
+    #expect(filledRows.count == 1)
+}
+
+@Test("multiple lines are cleared when fully filled")
+func clearLines_multipleLines() {
+    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    for row in 8...10 {
+        grid[row] = Array(repeating: .filled(.cyan), count: 10)
+    }
+
+    #expect(linesClearedIn(grid) == 3)
+}
+
+@Test("four lines are cleared simultaneously")
+func clearLines_fourLines() {
+    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    for row in 16...19 {
+        grid[row] = Array(repeating: .filled(.blue), count: 10)
+    }
+
+    #expect(linesClearedIn(grid) == 4)
+}
+
+@Test("only fully filled rows are removed from grid")
+func clearLines_onlyFullRowsRemoved() {
+    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    for row in 10...12 {
+        grid[row] = Array(repeating: .filled(.green), count: 10)
+    }
+
+    let fullCount = grid.filter { $0.allSatisfy { $0.isFilled } }.count
+    #expect(fullCount == 3)
+
+    // Check that partial rows remain
+    grid[11][5] = .empty
+    let remainingFull = grid.filter { $0.allSatisfy { $0.isFilled } }.count
+    #expect(remainingFull == 2)
+}
+
 // MARK: - Helper Functions
 
 func isColliding(grid: [[BlockState]], piece: Tetromino, x: Int, y: Int) -> Bool {

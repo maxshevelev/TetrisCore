@@ -322,17 +322,17 @@ public actor GameController: InputReceiver {
     }
 
     private func clearLinesPrivate() {
-        var linesToClear: [Int] = []
-        for y in 0..<height {
-            if grid[y].allSatisfy({ $0.isFilled }) {
-                linesToClear.append(y)
-            }
-        }
+        let linesToClear = grid.indices.filter { grid[$0].allSatisfy { $0.isFilled } }
         let count = linesToClear.count
         if count == 0 { return }
         score += Self.baseScores[count, default: 0] * (level + 1)
         linesCleared += count
         logDebug("[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared)")
+        // Remove from bottom to top so indices stay valid
+        for y in linesToClear.reversed() {
+            grid.remove(at: y)
+        }
+        grid.insert(contentsOf: Array(repeating: Array(repeating: .empty, count: width), count: count), at: 0)
     }
 
     private func spawnNextPiece() {
