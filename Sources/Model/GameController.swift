@@ -131,7 +131,7 @@ public actor GameController: InputReceiver {
             guard state == .dropping else { return }
             if canMoveDownPrivate() {
                 currentY += 1
-                transition(to: .dropping)
+                resetDropTimer()
             } else {
                 transition(to: .locking)
             }
