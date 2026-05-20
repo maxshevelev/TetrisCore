@@ -7,6 +7,8 @@ import os
 public actor GameController: InputReceiver {
     // MARK: - Constants
 
+    private static let baseScores: [Int: Int] = [1: 40, 2: 100, 3: 300, 4: 1200]
+
     private let width = 10
     private let height = 20
     private let lockDelay: TimeInterval = 0.5
@@ -328,8 +330,7 @@ public actor GameController: InputReceiver {
         }
         let count = linesToClear.count
         if count == 0 { return }
-        let baseScores: [Int: Int] = [1: 40, 2: 100, 3: 300, 4: 1200]
-        score += baseScores[count, default: 0] * (level + 1)
+        score += Self.baseScores[count, default: 0] * (level + 1)
         linesCleared += count
         logDebug("[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared)")
     }
