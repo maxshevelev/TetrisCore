@@ -1,7 +1,7 @@
 // ConsoleRenderer.swift - Renders game state to ANSI escape sequences
 
 import Foundation
-import Model
+import TetrisCore
 
 public protocol GameRenderer {
     func render(data: GameSessionState) -> String
@@ -209,7 +209,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         score: Int,
         level: Int,
         playerName: String,
-        topScores: [Model.StoredScore],
+        topScores: [TetrisCore.StoredScore],
         terminalSize: (rows: Int, cols: Int)
     ) -> String {
         var lines: [OverlayLine] = [

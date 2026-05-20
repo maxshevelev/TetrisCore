@@ -1,5 +1,5 @@
 import Testing
-import Model
+import TetrisCore
 
 // MARK: - Movement Tests
 

@@ -1,5 +1,5 @@
 import Foundation
-import Model
+import TetrisCore
 
 /// Console color palette mapping tetromino colors to ANSI escape codes.
 /// Also provides additional colors for other UI elements.

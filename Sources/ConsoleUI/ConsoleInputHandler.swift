@@ -2,7 +2,7 @@
 
 import Darwin
 import Foundation
-import Model
+import TetrisCore
 
 class ConsoleInputHandler: @unchecked Sendable {
     private let inputQueue = DispatchQueue(label: "input.queue")

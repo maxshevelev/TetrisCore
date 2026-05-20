@@ -3,7 +3,7 @@
 import ArgumentParser
 import ConsoleUI
 import Foundation
-import Model
+import TetrisCore
 import os
 
 @main
