@@ -3,7 +3,7 @@ import Model
 
 /// Console color palette mapping tetromino colors to ANSI escape codes.
 /// Also provides additional colors for other UI elements.
-public enum ColorPalette {
+public enum ColorPalette: Sendable {
     case cyan
     case yellow
     case magenta
