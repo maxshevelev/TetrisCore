@@ -15,7 +15,7 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 - **Optional debug logging** via `-d` flag with log level (debug, info, notice, error, fault), uses Apple `os.Logger` — all logs use `privacy: .public`
 - **Optional player name** via `-u, --user` flag, persisted in `~/.tetris/settings.json`, defaults to Unix username
 - **Color abstraction**: `TetrominoColor` (TetrisCore) → `ColorPalette` (ConsoleUI) for ANSI mapping
-- **State machine**: `GameController` uses a validated transition graph — all state changes go through `transition(to:)`, timer lifecycle is managed exclusively in `state.didSet`
+- **State machine**: `GameController` uses a validated transition graph — all state changes go through `transition(to:)`, timer lifecycle is managed exclusively in `state.didSet`. The internal `GameState` enum (5 cases) is mapped to a public `GameDisplayState` (3 cases: playing/paused/gameOver) for consumers.
 
 ## Key Files & Responsibilities
 
@@ -23,7 +23,8 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 |------|------|
 | `Sources/tetris/Main.swift` | Entry point, ArgumentParser CLI, wires logger + UI |
 | `Sources/TetrisCore/GameController.swift` | Actor: game loop, input handling, state machine (`transition(to:)`, `validTransitions`), scoring, `log` method |
-| `Sources/TetrisCore/GameState.swift` | Game state enum with validated transition graph — all state changes go through `transition(to:)` in GameController |
+| `Sources/TetrisCore/GameState.swift` | Internal state machine enum (5 internal states) — not exposed to consumers |
+| `Sources/TetrisCore/GameDisplayState.swift` | Consumer-facing state enum (playing/paused/gameOver) — exposed via `GameSessionState` |
 | `Sources/TetrisCore/LogLevel.swift` | Log level enum — `allows` gates messages, used by `log(level, .)` |
 | `Sources/ConsoleUI/ColorPalette.swift` | ANSI color palette, maps `TetrominoColor` → `ColorPalette` |
 | `Sources/TetrisCore/ScoreStorage.swift` | JSON persistence for top-10 scores, thread-safe |
@@ -45,7 +46,7 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 - Soft drop with lock delay (0.5s), piece movement resets timer
 - `Tetromino` is an immutable `Sendable` struct — use `rotated(by:)`, never mutate in place
 - `LogLevel` gates messages via `allows` — a level X permits messages at level X or higher
-- `GameState`, `TetrominoColor`, `Tetromino`, `TetrominoShape`, `ColorPalette` are all `Sendable`
+- `GameDisplayState`, `TetrominoColor`, `Tetromino`, `TetrominoShape`, `ColorPalette` are all `Sendable`. `GameState` is internal.
 - State machine: all state changes go through `transition(to:)` backed by `validTransitions` table — invalid transitions are silently rejected with a debug log. Timer lifecycle is managed exclusively in `state.didSet`, never called directly.
 
 ## Active Tasks & Status
@@ -59,3 +60,4 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 - ✅ Line clearing unit tests added
 - ✅ `awaitInput()` removed (dead code)
 - ✅ Validated state machine: `validTransitions` table + `transition(to:)` — timer lifecycle through `didSet` only
+- ✅ Consumer API: internal `GameState` mapped to public `GameDisplayState` (playing/paused/gameOver) — internal timer states hidden from consumers
