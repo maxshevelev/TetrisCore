@@ -98,22 +98,16 @@ public actor GameController: InputReceiver {
     private var sentTopScores: [StoredScore]?
     private var sentPlayerName: String?
 
-    // MARK: - Callbacks
-
-    private let onGameFinished: @Sendable () -> Void
-
     public init(
         logger: Logger = Logger(),
         logLevel: LogLevel? = nil,
         scoreStorage: ScoreStorage = ScoreStorage(),
-        playerName: String = defaultPlayerName(),
-        onGameFinished: @escaping @Sendable () -> Void
+        playerName: String = defaultPlayerName()
     ) {
         self.minLogLevel = logLevel
         self.log = logger
         self.scoreStorage = scoreStorage
         self.playerName = playerName
-        self.onGameFinished = onGameFinished
         self.grid = Array(repeating: Array(repeating: .empty, count: width), count: height)
 
         var tkc: AsyncStream<Set<GameEvent>>.Continuation!
@@ -284,14 +278,9 @@ public actor GameController: InputReceiver {
                     log(.debug,"[Input] resume")
                     guard state == .paused else { continue }
                     transition(to: .dropping)
-                case .exit:
-                    log(.debug,"[Input] exit")
-                    if state == .gameOver {
-                        finish()
-                        return
-                    } else {
-                        transition(to: .gameOver)
-                    }
+                case .stop:
+                    log(.debug,"[Input] stop")
+                    transition(to: .gameOver)
                 }
                 render()
             }
@@ -430,8 +419,4 @@ public actor GameController: InputReceiver {
         tickContinuation.yield(events)
     }
 
-    private func finish() {
-        render()
-        onGameFinished()
-    }
 }

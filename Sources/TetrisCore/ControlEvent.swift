@@ -8,5 +8,5 @@ public enum ControlEvent: Sendable {
     case hardDrop
     case pause
     case resume
-    case exit
+    case stop
 }

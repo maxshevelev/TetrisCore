@@ -13,6 +13,8 @@ class ConsoleInputHandler: @unchecked Sendable {
     /// Updated by the UI layer with the latest game state so the handler
     /// can send the right control event (pause vs. continue) for esc.
     var currentDisplayState: GameDisplayState = .playing
+    /// Called when the user presses q on the game-over screen.
+    var onExit: (() -> Void)?
 
     func setInputReceiver(_ receiver: InputReceiver) {
         self.inputReceiver = receiver
@@ -65,7 +67,14 @@ class ConsoleInputHandler: @unchecked Sendable {
             let event: ControlEvent = self.currentDisplayState == .paused ? .resume : .pause
             await self.inputReceiver?.enqueue(event)
         }
-        case "q": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.exit) }
+        case "q": Task.detached { [weak self] in
+            guard let self else { return }
+            if self.currentDisplayState == .gameOver {
+                self.onExit?()
+            } else {
+                await self.inputReceiver?.enqueue(.stop)
+            }
+        }
         default: break
         }
     }

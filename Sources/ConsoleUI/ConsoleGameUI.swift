@@ -31,10 +31,10 @@ public final class ConsoleGameUI: @unchecked Sendable {
             logger: logger,
             logLevel: logLevel,
             scoreStorage: scoreStorage,
-            playerName: playerName,
-            onGameFinished: { doneSemaphore.signal() }
+            playerName: playerName
         )
         input?.setInputReceiver(controller)
+        input?.onExit = { doneSemaphore.signal() }
 
         let outputQueue = DispatchQueue(label: "tetris.output")
 
