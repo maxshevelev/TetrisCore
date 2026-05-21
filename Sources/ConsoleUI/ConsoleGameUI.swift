@@ -49,6 +49,7 @@ public final class ConsoleGameUI: @unchecked Sendable {
                     logger.debug("[Tick] \(events.map(\.label).sorted().formatted(), privacy: .public)")
                 }
                 acc.apply(events)
+                input?.currentDisplayState = acc.displayState
                 let output = renderer.render(data: acc.snapshot())
                 outputQueue.async {
                     print(output, terminator: "")

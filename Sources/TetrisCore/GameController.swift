@@ -234,7 +234,7 @@ public actor GameController: InputReceiver {
 
     // MARK: - Input Receiver
 
-    public func enqueue(_ event: KeyEvent) async {
+    public func enqueue(_ event: ControlEvent) async {
         await inputBuffer.send(event)
     }
 
@@ -252,9 +252,9 @@ public actor GameController: InputReceiver {
     private func startInputListener() {
         Task {
             while true {
-                let keyEvent = await self.inputBuffer.receive()
+                let controlEvent = await self.inputBuffer.receive()
 
-                switch keyEvent {
+                switch controlEvent {
                 case .moveLeft:
                     log(.debug,"[Input] move_left at x=\(currentX)")
                     guard isPlaying else { continue }
@@ -276,21 +276,22 @@ public actor GameController: InputReceiver {
                     } else {
                         continue
                     }
-                case .esc:
-                    log(.debug,"[Input] esc")
-                    if isPlaying {
-                        transition(to: .paused)
-                    } else if state == .paused {
-                        transition(to: .dropping)
-                    } else if state == .gameOver {
+                case .pause:
+                    log(.debug,"[Input] pause")
+                    guard isPlaying else { continue }
+                    transition(to: .paused)
+                case .resume:
+                    log(.debug,"[Input] resume")
+                    guard state == .paused else { continue }
+                    transition(to: .dropping)
+                case .exit:
+                    log(.debug,"[Input] exit")
+                    if state == .gameOver {
                         finish()
-                        return // and finish the input listener task
+                        return
                     } else {
-                        continue
+                        transition(to: .gameOver)
                     }
-                case .quit:
-                    log(.debug,"[Input] quit")
-                    transition(to: .gameOver)
                 }
                 render()
             }

@@ -10,6 +10,9 @@ class ConsoleInputHandler: @unchecked Sendable {
     private var running = false
 
     private weak var inputReceiver: InputReceiver?
+    /// Updated by the UI layer with the latest game state so the handler
+    /// can send the right control event (pause vs. continue) for esc.
+    var currentDisplayState: GameDisplayState = .playing
 
     func setInputReceiver(_ receiver: InputReceiver) {
         self.inputReceiver = receiver
@@ -57,8 +60,12 @@ class ConsoleInputHandler: @unchecked Sendable {
         case "l": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.moveRight) }
         case "k": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.rotate) }
         case " ": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.hardDrop) }
-        case "\u{1b}": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.esc) }
-        case "q": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.quit) }
+        case "\u{1b}": Task.detached { [weak self] in
+            guard let self else { return }
+            let event: ControlEvent = self.currentDisplayState == .paused ? .resume : .pause
+            await self.inputReceiver?.enqueue(event)
+        }
+        case "q": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.exit) }
         default: break
         }
     }
