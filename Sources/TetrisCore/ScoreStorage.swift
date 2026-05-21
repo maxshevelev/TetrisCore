@@ -19,14 +19,12 @@ public final class ScoreStorage: Sendable {
     private let lock = NSLock()
 
     /// Creates a storage pointing to the given file URL.
-    /// Defaults to `~/.tetris/scores.json`.
+    /// Defaults to `~/.tetris/scores.json` on macOS, `~/Library/Application Support/Tetris/scores.json` on iOS.
     public init(filePath: URL? = nil) {
         if let filePath {
             self.filePath = filePath
         } else {
-            let dir = FileManager.default.homeDirectoryForCurrentUser
-                .appendingPathComponent(".tetris")
-            self.filePath = dir.appendingPathComponent("scores.json")
+            self.filePath = tetrisDirectory().appendingPathComponent("scores.json")
         }
     }
 
@@ -81,11 +79,18 @@ public final class ScoreStorage: Sendable {
 
 // MARK: - Player name storage
 
-private let appSettingsPath: URL = {
-    let dir = FileManager.default.homeDirectoryForCurrentUser
-        .appendingPathComponent(".tetris")
-    return dir.appendingPathComponent("settings.json")
-}()
+private func tetrisDirectory() -> URL {
+#if os(macOS)
+    FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".tetris")
+#else
+    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        .appendingPathComponent("Tetris")
+#endif
+}
+
+private var appSettingsPath: URL {
+    tetrisDirectory().appendingPathComponent("settings.json")
+}
 
 public func defaultPlayerName() -> String {
     if let data = try? Data(contentsOf: appSettingsPath),
