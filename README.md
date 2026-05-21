@@ -113,7 +113,8 @@ public init(
     logger: Logger = Logger(),
     logLevel: LogLevel? = nil,
     scoreStorage: ScoreStorage = ScoreStorage(),
-    playerName: String = defaultPlayerName()
+    playerName: String = defaultPlayerName(),
+    isHardDropAnimated: Bool = false
 )
 ```
 
@@ -123,6 +124,7 @@ public init(
 | `logLevel` | Optional minimum log level for filtering |
 | `scoreStorage` | Backend for persisting top scores to JSON |
 | `playerName` | Display name for score tracking |
+| `isHardDropAnimated` | When `true`, hard drops emit a `hardDropDuration` hint on the `.pieceBlocks` event and delay the lock transition by that duration so the consumer can animate the piece falling. When `false` (default, used by the console UI), hard drops lock immediately with no animation hint. |
 
 #### Update Stream
 
@@ -137,7 +139,7 @@ Each tick yields a `Set<GameEvent>` containing only the values that changed sinc
 | Event | Type | Emits when |
 |-------|------|------------|
 | `.grid` | `[[BlockState]]` | Piece locks, lines are cleared |
-| `.pieceBlocks` | `[PieceBlock]` | Every tick, move, rotate (current piece position) |
+| `.pieceBlocks` | `([PieceBlock], hardDropDuration: TimeInterval?)` | Every tick, move, rotate (current piece position). The optional `hardDropDuration` is non-nil when the piece position is the result of a hard drop — the consumer should animate the piece falling to this position over the given duration. `nil` means the move was gravity-driven. |
 | `.nextPieceBlocks` | `[PieceBlock]` | Piece locks (new next piece generated) |
 | `.score` | `Int` | Lines are cleared |
 | `.level` | `Int` | Level advances |
