@@ -15,6 +15,7 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 - **Optional debug logging** via `-d` flag with log level (debug, info, notice, error, fault), uses Apple `os.Logger` — all logs use `privacy: .public`
 - **Optional player name** via `-u, --user` flag, persisted in `~/.tetris/settings.json`, defaults to Unix username
 - **Color abstraction**: `TetrominoColor` (TetrisCore) → `ColorPalette` (ConsoleUI) for ANSI mapping
+- **Tick-based update stream**: `GameController` exposes `nonisolated public let tick: AsyncStream<Set<GameEvent>>`. Each tick yields a set of `GameEvent` values — only changed fields are included. Absence from the set means unchanged. Consumers accumulate state by switching over events.
 - **State machine**: `GameController` uses a validated transition graph — all state changes go through `transition(to:)`, timer lifecycle is managed exclusively in `state.didSet`. The internal `GameState` enum (5 cases) is mapped to a public `GameDisplayState` (3 cases: playing/paused/gameOver) for consumers.
 
 ## Key Files & Responsibilities
@@ -24,12 +25,11 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 | `Sources/tetris/Main.swift` | Entry point, ArgumentParser CLI, wires logger + UI |
 | `Sources/TetrisCore/GameController.swift` | Actor: game loop, input handling, state machine (`transition(to:)`, `validTransitions`), scoring, `log` method |
 | `Sources/TetrisCore/GameState.swift` | Internal state machine enum (5 internal states) — not exposed to consumers |
-| `Sources/TetrisCore/GameDisplayState.swift` | Consumer-facing state enum (playing/paused/gameOver) — exposed via `GameSessionState` |
+| `Sources/TetrisCore/GameDisplayState.swift` | Consumer-facing state enum (playing/paused/gameOver) — included in `GameEvent` |
 | `Sources/TetrisCore/LogLevel.swift` | Log level enum — `allows` gates messages, used by `log(level, .)` |
 | `Sources/ConsoleUI/ColorPalette.swift` | ANSI color palette, maps `TetrominoColor` → `ColorPalette` |
 | `Sources/TetrisCore/ScoreStorage.swift` | JSON persistence for top-10 scores, thread-safe |
-| `Sources/TetrisCore/GameSessionState.swift` | Immutable snapshot passed to renderer |
-| `Sources/ConsoleUI/ConsoleRenderer.swift` | Virtual grid → ANSI, overlay system with `OverlayLine` |
+| `Sources/TetrisCore/GameEvent.swift` | Diff-style update event enum — each variant carries changed data; unused variants omitted from set |
 | `Sources/ConsoleUI/ConsoleGameUI.swift` | Facade: adapter pattern, lifecycle management |
 | `Sources/ConsoleUI/TerminalAdapter.swift` | Terminal operations abstraction |
 | `Sources/TetrisCore/Tetromino.swift` | Shape definitions, rotation (`rotated(by:)`), block coordinates — immutable struct |
@@ -61,3 +61,4 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 - ✅ `awaitInput()` removed (dead code)
 - ✅ Validated state machine: `validTransitions` table + `transition(to:)` — timer lifecycle through `didSet` only
 - ✅ Consumer API: internal `GameState` mapped to public `GameDisplayState` (playing/paused/gameOver) — internal timer states hidden from consumers
+- ✅ Tick-based update stream: `GameController` exposes `nonisolated public let tick: AsyncStream<Set<GameEvent>>` — only changed fields are yielded as events; absence from set means unchanged

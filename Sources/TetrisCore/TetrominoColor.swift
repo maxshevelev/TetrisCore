@@ -4,7 +4,7 @@ import Foundation
 
 /// Represents the colors of tetromino pieces.
 /// This is a UI-agnostic color definition; renderers convert to display format.
-public enum TetrominoColor: Sendable {
+public enum TetrominoColor: Hashable, Sendable {
     case cyan    // I piece
     case yellow  // O piece
     case magenta // T piece

@@ -2,7 +2,7 @@
 // Internal timer states (dropping, locking, initializing) are collapsed
 // so consumers only see what matters for their UI.
 
-public enum GameDisplayState: Sendable {
+public enum GameDisplayState: Hashable, Sendable {
     /// Game is actively running — render the board and accept input.
     case playing
     /// Game is paused — show a pause overlay.
