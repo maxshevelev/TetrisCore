@@ -9,6 +9,10 @@ let package = Package(
         .macOS(.v13),
         .iOS(.v16),
     ],
+    products: [
+        .library(name: "TetrisCore", targets: ["TetrisCore"]),
+        .library(name: "ConsoleUI", targets: ["ConsoleUI"]),
+    ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-argument-parser", from: "1.7.1"),
     ],
