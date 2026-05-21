@@ -98,22 +98,16 @@ public actor GameController: InputReceiver {
     private var sentTopScores: [StoredScore]?
     private var sentPlayerName: String?
 
-    // MARK: - Callbacks
-
-    private let onGameFinished: @Sendable () -> Void
-
     public init(
         logger: Logger = Logger(),
         logLevel: LogLevel? = nil,
         scoreStorage: ScoreStorage = ScoreStorage(),
-        playerName: String = defaultPlayerName(),
-        onGameFinished: @escaping @Sendable () -> Void
+        playerName: String = defaultPlayerName()
     ) {
         self.minLogLevel = logLevel
         self.log = logger
         self.scoreStorage = scoreStorage
         self.playerName = playerName
-        self.onGameFinished = onGameFinished
         self.grid = Array(repeating: Array(repeating: .empty, count: width), count: height)
 
         var tkc: AsyncStream<Set<GameEvent>>.Continuation!
@@ -234,7 +228,7 @@ public actor GameController: InputReceiver {
 
     // MARK: - Input Receiver
 
-    public func enqueue(_ event: KeyEvent) async {
+    public func enqueue(_ event: ControlEvent) async {
         await inputBuffer.send(event)
     }
 
@@ -252,9 +246,9 @@ public actor GameController: InputReceiver {
     private func startInputListener() {
         Task {
             while true {
-                let keyEvent = await self.inputBuffer.receive()
+                let controlEvent = await self.inputBuffer.receive()
 
-                switch keyEvent {
+                switch controlEvent {
                 case .moveLeft:
                     log(.debug,"[Input] move_left at x=\(currentX)")
                     guard isPlaying else { continue }
@@ -276,20 +270,16 @@ public actor GameController: InputReceiver {
                     } else {
                         continue
                     }
-                case .esc:
-                    log(.debug,"[Input] esc")
-                    if isPlaying {
-                        transition(to: .paused)
-                    } else if state == .paused {
-                        transition(to: .dropping)
-                    } else if state == .gameOver {
-                        finish()
-                        return // and finish the input listener task
-                    } else {
-                        continue
-                    }
-                case .quit:
-                    log(.debug,"[Input] quit")
+                case .pause:
+                    log(.debug,"[Input] pause")
+                    guard isPlaying else { continue }
+                    transition(to: .paused)
+                case .resume:
+                    log(.debug,"[Input] resume")
+                    guard state == .paused else { continue }
+                    transition(to: .dropping)
+                case .stop:
+                    log(.debug,"[Input] stop")
                     transition(to: .gameOver)
                 }
                 render()
@@ -429,8 +419,4 @@ public actor GameController: InputReceiver {
         tickContinuation.yield(events)
     }
 
-    private func finish() {
-        render()
-        onGameFinished()
-    }
 }

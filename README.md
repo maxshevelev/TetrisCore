@@ -23,14 +23,14 @@ The project is split into three targets with strict layer separation:
 │  ─ GameEvent (diff-style event enum)        │
 │  ─ Tetromino, TetrominoShape definitions    │
 │  ─ ScoreStorage (JSON persistence)          │
-│  ─ InputReceiver / KeyEvent protocol        │
+│  ─ InputReceiver / ControlEvent protocol    │
 └─────────────────────────────────────────────┘
 ```
 
 **Key design decisions:**
 
 - **Actor-based concurrency**: `GameController` is a Swift `actor`, providing data-race-free access to game state across concurrent contexts. All state mutations are serialized through the actor's executor.
-- **Event-driven input**: An internal `InputBuffer` actor decouples input production from consumption. UI layers send `KeyEvent` values via `enqueue(_:)`, and the game loop processes them sequentially.
+- **Event-driven input**: An internal `InputBuffer` actor decouples input production from consumption. UI layers send `ControlEvent` values via `enqueue(_:)`, and the game loop processes them sequentially.
 - **Diff-style tick stream**: `GameController` exposes `nonisolated public let tick: AsyncStream<Set<GameEvent>>` — each tick yields a set of `GameEvent` values for only the changed fields. Absence from the set means unchanged. Consumers accumulate state by switching over events.
 - **Validated state machine**: All `GameState` transitions go through a `transition(to:)` method backed by a `validTransitions` table. Invalid transitions are silently rejected — the state graph is defined in one place, not scattered across call sites.
 - **Timer lifecycle in didSet**: Drop and lock timers are started/stopped exclusively in `state.didSet`, ensuring consistent lifecycle management regardless of which code path triggers the transition.
@@ -60,8 +60,8 @@ swift run tetris -d debug -u Alice
 | `l` | Move right |
 | `k` | Rotate |
 | `Space` | Hard drop / Start new game |
-| `Esc` | Pause / Resume / Exit from game over |
-| `q` | Quit to game over screen |
+| `Esc` | Pause / Resume |
+| `q` | Stop playing / Exit from game over |
 
 ### CLI Options
 
@@ -113,8 +113,7 @@ public init(
     logger: Logger = Logger(),
     logLevel: LogLevel? = nil,
     scoreStorage: ScoreStorage = ScoreStorage(),
-    playerName: String = defaultPlayerName(),
-    onGameFinished: @escaping @Sendable () -> Void
+    playerName: String = defaultPlayerName()
 )
 ```
 
@@ -124,7 +123,6 @@ public init(
 | `logLevel` | Optional minimum log level for filtering |
 | `scoreStorage` | Backend for persisting top scores to JSON |
 | `playerName` | Display name for score tracking |
-| `onGameFinished` | Called when the player exits the game via ESC from game over |
 
 #### Update Stream
 
@@ -170,37 +168,40 @@ Task {
 /// Start the game. Begins the drop timer and input listener.
 public func start()
 
-/// Send a key event for processing.
-/// - Parameter event: The KeyEvent to enqueue.
-public func enqueue(_ event: KeyEvent) async
+/// Send a control event for processing.
+/// - Parameter event: The ControlEvent to enqueue.
+public func enqueue(_ event: ControlEvent) async
 ```
 
 The `InputReceiver` protocol:
 
 ```swift
 public protocol InputReceiver: AnyObject & Sendable {
-    func enqueue(_ event: KeyEvent) async
+    func enqueue(_ event: ControlEvent) async
 }
 ```
 
-### `KeyEvent`
+### `ControlEvent`
 
-Input events recognized by the game engine.
+Input events recognized by the game engine. Source-agnostic — can originate from keyboard, gamepad, gestures, etc.
 
 ```swift
-public enum KeyEvent: Sendable {
+public enum ControlEvent: Sendable {
     case moveLeft
     case moveRight
     case rotate
     case hardDrop
-    case esc
-    case quit
+    case pause
+    case resume
+    case stop
 }
 ```
 
-- `esc` toggles pause/resume during play and exits to main menu from game over.
-- `quit` immediately ends the game (triggers game over and score save).
+- `pause` pauses the game (ignored unless playing).
+- `resume` resumes the game (ignored unless paused).
+- `stop` ends the current game (transitions to game over and saves the score).
 - `hardDrop` also functions as "start new game" when in the game over state.
+- Events that don't match the current game state are silently ignored.
 
 ---
 
@@ -309,8 +310,9 @@ public struct StoredScore: Codable, Equatable {
 }
 
 public final class ScoreStorage: Sendable {
-    /// Default path: ~/.tetris/scores.json
-    /// On iOS, pass an app-sandbox path via filePath.
+    /// Default path: ~/.tetris/scores.json on macOS,
+    /// ~/Library/Application Support/Tetris/scores.json on iOS.
+    /// Pass a custom filePath for sandboxed environments.
     public init(filePath: URL? = nil)
 
     @discardableResult
@@ -347,11 +349,11 @@ A level permits messages at itself and higher (debug < info < notice < error < f
 ### Player Name Utilities
 
 ```swift
-/// Returns persisted player name from ~/.tetris/settings.json,
-/// or the system username as fallback.
+/// Returns the persisted player name, or the system username as fallback.
+/// On macOS reads from ~/.tetris/settings.json, on iOS from Application Support.
 public func defaultPlayerName() -> String
 
-/// Persist a player name to ~/.tetris/settings.json.
+/// Persist a player name.
 public func storePlayerName(_ name: String)
 ```
 
@@ -372,9 +374,7 @@ Level advances every 10 lines cleared, up to a maximum of level 10. Drop speed i
 
 ## Persistent Data
 
-| File | Path | Content |
-|------|------|---------|
-| Scores | `~/.tetris/scores.json` | Top 10 scores with player name and level |
-| Settings | `~/.tetris/settings.json` | Player name preference |
-
-On iOS, provide custom paths via `ScoreStorage(filePath:)` and `storePlayerName()`.
+| File | Path (macOS) | Path (iOS) | Content |
+|------|-------------|------------|---------|
+| Scores | `~/.tetris/scores.json` | `~/Library/Application Support/Tetris/scores.json` | Top 10 scores with player name and level |
+| Settings | `~/.tetris/settings.json` | `~/Library/Application Support/Tetris/settings.json` | Player name preference |
