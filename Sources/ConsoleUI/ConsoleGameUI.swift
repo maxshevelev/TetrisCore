@@ -23,32 +23,43 @@ public final class ConsoleGameUI: @unchecked Sendable {
         input?.start()
 
         let renderer = ConsoleRenderer(terminal: TerminalAdapter())
-        var gameController: GameController?
+        let scoreStorage = ScoreStorage()
 
         let doneSemaphore = DispatchSemaphore(value: 0)
 
-        let scoreStorage = ScoreStorage()
-
-        gameController = GameController(
+        let controller = GameController(
             logger: logger,
             logLevel: logLevel,
             scoreStorage: scoreStorage,
             playerName: playerName,
-            onRender: { state in
-                let output = renderer.render(data: state)
-                print(output, terminator: "")
-                fflush(stdout)
-            },
-            onGameFinished: {
-                doneSemaphore.signal()
-            }
+            onGameFinished: { doneSemaphore.signal() }
         )
-        input?.setInputReceiver(gameController!)
+        input?.setInputReceiver(controller)
 
-        // Start/restart the game
-        await gameController!.start()
+        let outputQueue = DispatchQueue(label: "tetris.output")
 
-        // Wait for game over using semaphore
+        // Accumulated state with all required fields — merged from tick diffs.
+        var acc = AccumulatedState()
+
+        var tasks: [Task<Void, Never>] = []
+
+        tasks.append(Task {
+            for await events in controller.tick {
+                if !events.isEmpty {
+                    logger.debug("[Tick] \(events.map(\.label).sorted().formatted(), privacy: .public)")
+                }
+                acc.apply(events)
+                let output = renderer.render(data: acc.snapshot())
+                outputQueue.async {
+                    print(output, terminator: "")
+                    fflush(stdout)
+                }
+            }
+        })
+
+        await controller.start()
+
+        // Wait for game over
         await withUnsafeContinuation { (continuation: UnsafeContinuation<Void, Never>) in
             DispatchQueue.global().async {
                 doneSemaphore.wait()
@@ -56,8 +67,8 @@ public final class ConsoleGameUI: @unchecked Sendable {
             }
         }
 
-        // Clean up the old controller before restarting
-        gameController = nil
+        // Cancel stream tasks and release controller
+        tasks.forEach { $0.cancel() }
 
         // Final cleanup
         input?.stop()
@@ -67,4 +78,79 @@ public final class ConsoleGameUI: @unchecked Sendable {
         print(Terminal.showCursor)
         fflush(stdout)
     }
+}
+
+// MARK: - Logging extension
+
+extension GameEvent {
+    /// Short label for logging — omits associated values.
+    var label: String {
+        switch self {
+        case .grid:             "grid"
+        case .pieceBlocks:      "piece"
+        case .nextPieceBlocks:  "next"
+        case .score(let v):     "score(\(v))"
+        case .level(let v):     "level(\(v))"
+        case .linesCleared(let v): "lines(\(v))"
+        case .state(let v):     "state(\(v))"
+        case .topScores(let v): "scores(\(v.count))"
+        case .playerName(let v): "player(\(v))"
+        }
+    }
+}
+
+/// Non-optional accumulated state built from tick events.
+private struct AccumulatedState {
+    var grid: [[BlockState]] = []
+    var pieceBlocks: [PieceBlock] = []
+    var nextPieceBlocks: [PieceBlock] = []
+    var score = 0
+    var level = 1
+    var linesCleared = 0
+    var displayState: GameDisplayState = .playing
+    var topScores: [StoredScore] = []
+    var playerName = ""
+
+    mutating func apply(_ events: Set<GameEvent>) {
+        for event in events {
+            switch event {
+            case .grid(let v):        grid = v
+            case .pieceBlocks(let v): pieceBlocks = v
+            case .nextPieceBlocks(let v): nextPieceBlocks = v
+            case .score(let v):       score = v
+            case .level(let v):       level = v
+            case .linesCleared(let v): linesCleared = v
+            case .state(let v):       displayState = v
+            case .topScores(let v):   topScores = v
+            case .playerName(let v):  playerName = v
+            }
+        }
+    }
+
+    func snapshot() -> RenderSnapshot {
+        RenderSnapshot(
+            grid: grid,
+            pieceBlocks: pieceBlocks,
+            nextPieceBlocks: nextPieceBlocks,
+            score: score,
+            level: level,
+            linesCleared: linesCleared,
+            displayState: displayState,
+            topScores: topScores,
+            playerName: playerName
+        )
+    }
+}
+
+/// Complete state snapshot for rendering — all fields non-optional.
+public struct RenderSnapshot {
+    let grid: [[BlockState]]
+    let pieceBlocks: [PieceBlock]
+    let nextPieceBlocks: [PieceBlock]
+    let score: Int
+    let level: Int
+    let linesCleared: Int
+    let displayState: GameDisplayState
+    let topScores: [StoredScore]
+    let playerName: String
 }

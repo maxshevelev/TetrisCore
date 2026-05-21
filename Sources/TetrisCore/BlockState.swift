@@ -4,7 +4,7 @@ import Foundation
 
 /// Represents the state of a single cell in the game grid.
 /// This enum is UI-agnostic - the renderer decides how to display each state.
-public enum BlockState: Equatable {
+public enum BlockState: Hashable, Sendable {
     /// Empty cell with no block
     case empty
 

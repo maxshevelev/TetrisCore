@@ -79,11 +79,27 @@ public actor GameController: InputReceiver {
     // MARK: - Score Storage
 
     private let scoreStorage: ScoreStorage
-    private let playerName: String
+    private var playerName: String
+
+    // MARK: - Streams
+
+    nonisolated public let tick: AsyncStream<Set<GameEvent>>
+    nonisolated private let tickContinuation: AsyncStream<Set<GameEvent>>.Continuation
+
+    /// Cached values for computing diffs on the tick channel.
+    /// nil = never sent (first send includes all fields).
+    private var sentGrid: [[BlockState]]?
+    private var sentPieceBlocks: [PieceBlock]?
+    private var sentNextPieceBlocks: [PieceBlock]?
+    private var sentScore: Int?
+    private var sentLevel: Int?
+    private var sentLinesCleared: Int?
+    private var sentDisplayState: GameDisplayState?
+    private var sentTopScores: [StoredScore]?
+    private var sentPlayerName: String?
 
     // MARK: - Callbacks
 
-    private let onRender: @Sendable (GameSessionState) -> Void
     private let onGameFinished: @Sendable () -> Void
 
     public init(
@@ -91,16 +107,20 @@ public actor GameController: InputReceiver {
         logLevel: LogLevel? = nil,
         scoreStorage: ScoreStorage = ScoreStorage(),
         playerName: String = defaultPlayerName(),
-        onRender: @escaping @Sendable (GameSessionState) -> Void,
         onGameFinished: @escaping @Sendable () -> Void
     ) {
         self.minLogLevel = logLevel
         self.log = logger
         self.scoreStorage = scoreStorage
         self.playerName = playerName
-        self.onRender = onRender
         self.onGameFinished = onGameFinished
         self.grid = Array(repeating: Array(repeating: .empty, count: width), count: height)
+
+        var tkc: AsyncStream<Set<GameEvent>>.Continuation!
+        let tks = AsyncStream<Set<GameEvent>> { tkc = $0 }
+        self.tickContinuation = tkc
+        self.tick = tks
+
         let shapes: [TetrominoShape] = [.I, .O, .T, .S, .Z, .J, .L]
         self.nextPiece = Tetromino(shape: shapes.randomElement()!)
         self.currentPiece = self.nextPiece
@@ -138,7 +158,7 @@ public actor GameController: InputReceiver {
         dropTimer = Task {
             try? await Task.sleep(nanoseconds: UInt64(dropInterval * 1_000_000_000))
             guard state == .dropping else { return }
-            if canMoveDownPrivate() {
+            if canMoveDown() {
                 currentY += 1
                 transition(to: .dropping)
             } else {
@@ -159,7 +179,7 @@ public actor GameController: InputReceiver {
         lockTimer = Task {
             try? await Task.sleep(nanoseconds: UInt64(lockDelay * 1_000_000_000))
             guard state == .locking else { return }
-            if !canMoveDownPrivate() {
+            if !canMoveDown() {
                 lockPiecePrivate()
                 clearLinesPrivate()
                 spawnNewPiece()
@@ -177,10 +197,10 @@ public actor GameController: InputReceiver {
     private func log(_ level: LogLevel, _ message: String) {
         guard let minLogLevel, minLogLevel.allows(level) else { return }
         switch level {
-        case .debug:    log.debug("\(message, privacy: .public)")
-        case .info, .notice: log.info("\(message, privacy: .public)")
-        case .error:    log.error("\(message, privacy: .public)")
-        case .fault:    log.fault("\(message, privacy: .public)")
+        case .debug:    self.log.debug("\(message, privacy: .public)")
+        case .info, .notice: self.log.info("\(message, privacy: .public)")
+        case .error:    self.log.error("\(message, privacy: .public)")
+        case .fault:    self.log.fault("\(message, privacy: .public)")
         }
     }
 
@@ -201,6 +221,7 @@ public actor GameController: InputReceiver {
         nextPiece = Tetromino(shape: shapes.randomElement()!)
         score = 0
         linesCleared = 0
+        sentPlayerName = nil
     }
 
     private func restart() {
@@ -217,7 +238,14 @@ public actor GameController: InputReceiver {
         await inputBuffer.send(event)
     }
 
-    var isPlaying: Bool {
+    /// Update the player name for the next game.
+    /// Takes effect on the next game start — safe to call at any time.
+    public func setPlayerName(_ name: String) {
+        playerName = name
+        sentPlayerName = name
+    }
+
+    private var isPlaying: Bool {
         (state == .dropping || state == .locking)
     }
 
@@ -269,9 +297,9 @@ public actor GameController: InputReceiver {
         }
     }
 
-    // MARK: - Testable Game Logic Methods
+    // MARK: - Input Actions
 
-    public func moveLeft() {
+    private func moveLeft() {
         guard isPlaying else { return }
         currentX -= 1
         if isColliding() {
@@ -279,7 +307,7 @@ public actor GameController: InputReceiver {
         }
     }
 
-    public func moveRight() {
+    private func moveRight() {
         guard isPlaying else { return }
         currentX += 1
         if isColliding() {
@@ -287,7 +315,7 @@ public actor GameController: InputReceiver {
         }
     }
 
-    public func rotatePiece() {
+    private func rotatePiece() {
         guard isPlaying else { return }
         guard let piece = currentPiece else { return }
         let rotated = piece.rotated(by: -1)
@@ -298,24 +326,20 @@ public actor GameController: InputReceiver {
         }
     }
 
-    public func hardDropPiece() {
+    private func hardDropPiece() {
         guard isPlaying else { return }
-        while canMoveDownPrivate() { currentY += 1 }
+        while canMoveDown() { currentY += 1 }
         transition(to: .locking)
     }
 
-    private func canMoveDownPrivate() -> Bool {
+    private func canMoveDown() -> Bool {
         currentY += 1
-        let colliding = isCollidingPrivate()
+        let colliding = isColliding()
         currentY -= 1
         return !colliding
     }
 
-    public func isColliding() -> Bool {
-        isCollidingPrivate()
-    }
-
-    private func isCollidingPrivate() -> Bool {
+    private func isColliding() -> Bool {
         guard let piece = currentPiece else { return false }
         for (x, y) in piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY) {
             if x < 0 || x >= width || y >= height { return true }
@@ -388,18 +412,21 @@ public actor GameController: InputReceiver {
             nextPieceBlocks = []
         }
 
-        onRender(
-            GameSessionState(
-                grid: grid,
-                pieceBlocks: pieceBlocks,
-                nextPieceBlocks: nextPieceBlocks,
-                score: score,
-                level: level,
-                linesCleared: linesCleared,
-                state: displayState,
-                topScores: scoreStorage.topScores(),
-                playerName: playerName
-            ))
+        let gridCopy = grid
+        let topScores = scoreStorage.topScores()
+
+        var events = Set<GameEvent>()
+        if gridCopy != sentGrid { events.insert(.grid(gridCopy)); sentGrid = gridCopy }
+        if pieceBlocks != sentPieceBlocks { events.insert(.pieceBlocks(pieceBlocks)); sentPieceBlocks = pieceBlocks }
+        if nextPieceBlocks != sentNextPieceBlocks { events.insert(.nextPieceBlocks(nextPieceBlocks)); sentNextPieceBlocks = nextPieceBlocks }
+        if score != sentScore { events.insert(.score(score)); sentScore = score }
+        if level != sentLevel { events.insert(.level(level)); sentLevel = level }
+        if linesCleared != sentLinesCleared { events.insert(.linesCleared(linesCleared)); sentLinesCleared = linesCleared }
+        if displayState != sentDisplayState { events.insert(.state(displayState)); sentDisplayState = displayState }
+        if topScores != sentTopScores { events.insert(.topScores(topScores)); sentTopScores = topScores }
+        if playerName != sentPlayerName { events.insert(.playerName(playerName)); sentPlayerName = playerName }
+        guard !events.isEmpty else { return }
+        tickContinuation.yield(events)
     }
 
     private func finish() {

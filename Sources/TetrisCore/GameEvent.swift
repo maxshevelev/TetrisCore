@@ -1,0 +1,15 @@
+// GameEvent.swift - Diff-style update events for the tick stream
+
+/// A single changed value on the tick stream.
+/// Multiple events are yielded as a `Set` each tick — only changed fields appear.
+public enum GameEvent: Hashable, Sendable {
+    case grid([[BlockState]])
+    case pieceBlocks([PieceBlock])
+    case nextPieceBlocks([PieceBlock])
+    case score(Int)
+    case level(Int)
+    case linesCleared(Int)
+    case state(GameDisplayState)
+    case topScores([StoredScore])
+    case playerName(String)
+}

@@ -4,7 +4,7 @@ import Foundation
 import TetrisCore
 
 public protocol GameRenderer {
-    func render(data: GameSessionState) -> String
+    func render(data: RenderSnapshot) -> String
 }
 
 public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
@@ -14,10 +14,19 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         self.terminal = terminal
     }
 
-    public func render(data: GameSessionState) -> String {
+    public func render(data: RenderSnapshot) -> String {
         let size = terminal.getTerminalSize()
-        let width = data.grid.first?.count ?? 10
-        let height = data.grid.count
+        let grid = data.grid
+        let pieceBlocks = data.pieceBlocks
+        let nextPieceBlocks = data.nextPieceBlocks
+        let score = data.score
+        let level = data.level
+        let linesCleared = data.linesCleared
+        let displayState = data.displayState
+        let topScores = data.topScores
+        let playerName = data.playerName
+        let width = grid.first?.count ?? 10
+        let height = grid.count
         let boardWidth = width * 2 + 2
         let boardHeight = height + 2
         let padLeft = max(0, (size.cols - boardWidth) / 2)
@@ -28,7 +37,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         var output = terminal.home + terminal.eraseDown
 
         // Player name above grid
-        let playerLine = data.state == .gameOver ? nil : ("Player: " + data.playerName)
+        let playerLine = displayState == .gameOver ? nil : ("Player: " + playerName)
         if let playerLine {
             output += terminal.cursorPosition(row: startRow - 2, col: centerColumn(for: playerLine))
             output += terminal.bold + playerLine + terminal.reset
@@ -41,12 +50,12 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             output += terminal.cursorPosition(row: startRow + y + 1, col: startCol)
             output += terminal.bold + "║" + terminal.reset
             for x in 0..<width {
-                let currentCell = data.grid[y][x]
+                let currentCell = grid[y][x]
                 let paletteColor: ColorPalette?
 
                 if currentCell.isFilled {
                     paletteColor = currentCell.color.map(ColorPalette.from)
-                } else if let block = data.pieceBlocks.first(where: { $0.x == x && $0.y == y }) {
+                } else if let block = pieceBlocks.first(where: { $0.x == x && $0.y == y }) {
                     paletteColor = ColorPalette.from(block.color)
                 } else {
                     paletteColor = nil
@@ -69,11 +78,11 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             return max(1, startCol + offset)
         }
 
-        let scoreText = "Score: \(data.score)  Level: \(data.level)"
+        let scoreText = "Score: \(score)  Level: \(level)"
         let statusText: String
-        switch data.state {
+        switch displayState {
         case .playing:
-            statusText = "Lines: \(data.linesCleared)"
+            statusText = "Lines: \(linesCleared)"
         case .paused:
             statusText = "PAUSED - Press ESC to resume"
         case .gameOver:
@@ -92,31 +101,31 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             "q - quit",
         ]
 
-        if data.state == .gameOver {
-            let overlay = renderGameOverOverlay(score: data.score, level: data.level, playerName: data.playerName, topScores: data.topScores, terminalSize: size)
+        if displayState == .gameOver {
+            let overlay = renderGameOverOverlay(score: score, level: level, playerName: playerName, topScores: topScores, terminalSize: size)
             output += overlay
         } else {
             // Score line
             output += terminal.cursorPosition(row: startRow + height + 4, col: centerColumn(for: scoreText))
-            output += "Score: " + terminal.bold + String(data.score) + terminal.reset + "  Level: " + terminal.bold + String(data.level) + terminal.reset
+            output += "Score: " + terminal.bold + String(score) + terminal.reset + "  Level: " + terminal.bold + String(level) + terminal.reset
 
             // Empty line
             // Status line
             output += terminal.cursorPosition(row: startRow + height + 6, col: centerColumn(for: statusText))
-            if data.state == .paused {
+            if displayState == .paused {
                 output += terminal.bold + ColorPalette.red.ansiCode + statusText + terminal.reset
             } else {
                 output += statusText
             }
 
             // Next piece preview (left side)
-            if !data.nextPieceBlocks.isEmpty {
+            if !nextPieceBlocks.isEmpty {
                 output += terminal.cursorPosition(row: startRow, col: nextCol)
                 output += terminal.bold + "Next:" + terminal.reset
                 for y in 0..<4 {
                     output += terminal.cursorPosition(row: startRow + y + 2, col: nextCol)
                     for x in 0..<4 {
-                        if let block = data.nextPieceBlocks.first(where: { $0.x == x && $0.y == y }) {
+                        if let block = nextPieceBlocks.first(where: { $0.x == x && $0.y == y }) {
                             output += ColorPalette.from(block.color).ansiCode + "██" + terminal.reset
                         } else {
                             output += "  "

@@ -20,7 +20,7 @@ The project is split into three targets with strict layer separation:
 │  TetrisCore (macOS + iOS)                   │
 │  UI-agnostic game engine                    │
 │  ─ GameController (actor)                   │
-│  ─ GameSessionState (immutable snapshot)    │
+│  ─ GameEvent (diff-style event enum)        │
 │  ─ Tetromino, TetrominoShape definitions    │
 │  ─ ScoreStorage (JSON persistence)          │
 │  ─ InputReceiver / KeyEvent protocol        │
@@ -31,7 +31,7 @@ The project is split into three targets with strict layer separation:
 
 - **Actor-based concurrency**: `GameController` is a Swift `actor`, providing data-race-free access to game state across concurrent contexts. All state mutations are serialized through the actor's executor.
 - **Event-driven input**: An internal `InputBuffer` actor decouples input production from consumption. UI layers send `KeyEvent` values via `enqueue(_:)`, and the game loop processes them sequentially.
-- **Render snapshots**: `GameController` emits immutable `GameSessionState` values through `@Sendable` callbacks. Consumers map these to their native rendering system (console ANSI, SpriteKit, SwiftUI, etc.).
+- **Diff-style tick stream**: `GameController` exposes `nonisolated public let tick: AsyncStream<Set<GameEvent>>` — each tick yields a set of `GameEvent` values for only the changed fields. Absence from the set means unchanged. Consumers accumulate state by switching over events.
 - **Validated state machine**: All `GameState` transitions go through a `transition(to:)` method backed by a `validTransitions` table. Invalid transitions are silently rejected — the state graph is defined in one place, not scattered across call sites.
 - **Timer lifecycle in didSet**: Drop and lock timers are started/stopped exclusively in `state.didSet`, ensuring consistent lifecycle management regardless of which code path triggers the transition.
 - **Color abstraction**: `TetrominoColor` (in TetrisCore) is a UI-agnostic color enum. Each renderer maps it to its own color system — `ColorPalette` does this for ANSI consoles, a native app would map it to `UIColor`/`NSColor`.
@@ -114,7 +114,6 @@ public init(
     logLevel: LogLevel? = nil,
     scoreStorage: ScoreStorage = ScoreStorage(),
     playerName: String = defaultPlayerName(),
-    onRender: @escaping @Sendable (GameSessionState) -> Void,
     onGameFinished: @escaping @Sendable () -> Void
 )
 ```
@@ -125,8 +124,45 @@ public init(
 | `logLevel` | Optional minimum log level for filtering |
 | `scoreStorage` | Backend for persisting top scores to JSON |
 | `playerName` | Display name for score tracking |
-| `onRender` | Called on every state change with an immutable `GameSessionState` snapshot |
 | `onGameFinished` | Called when the player exits the game via ESC from game over |
+
+#### Update Stream
+
+`GameController` exposes a single `AsyncStream` that carries diff-style updates:
+
+```swift
+nonisolated public let tick: AsyncStream<Set<GameEvent>>
+```
+
+Each tick yields a `Set<GameEvent>` containing only the values that changed since the previous tick. Absence from the set means unchanged. The initial tick sends all fields.
+
+| Event | Type | Emits when |
+|-------|------|------------|
+| `.grid` | `[[BlockState]]` | Piece locks, lines are cleared |
+| `.pieceBlocks` | `[PieceBlock]` | Every tick, move, rotate (current piece position) |
+| `.nextPieceBlocks` | `[PieceBlock]` | Piece locks (new next piece generated) |
+| `.score` | `Int` | Lines are cleared |
+| `.level` | `Int` | Level advances |
+| `.linesCleared` | `Int` | Lines are cleared |
+| `.state` | `GameDisplayState` | Pause, resume, game over, restart |
+| `.topScores` | `[StoredScore]` | Game over (new score saved) |
+| `.playerName` | `String` | Game starts |
+
+Consumers accumulate state by switching over events:
+
+```swift
+Task {
+    for await events in controller.tick {
+        for event in events {
+            switch event {
+            case .grid(let g):  renderGrid(g)
+            case .score(let s): renderScore(s)
+            default: break
+            }
+        }
+    }
+}
+```
 
 #### Methods
 
@@ -137,21 +173,6 @@ public func start()
 /// Send a key event for processing.
 /// - Parameter event: The KeyEvent to enqueue.
 public func enqueue(_ event: KeyEvent) async
-
-/// Attempt to move the current piece left. No-op if blocked.
-public func moveLeft()
-
-/// Attempt to move the current piece right. No-op if blocked.
-public func moveRight()
-
-/// Rotate the current piece 90° counter-clockwise. No-op if collision.
-public func rotatePiece()
-
-/// Instantly drop the current piece to the lowest valid position.
-public func hardDropPiece()
-
-/// Check if the current piece collides at its current position.
-public func isColliding() -> Bool
 ```
 
 The `InputReceiver` protocol:
@@ -161,30 +182,6 @@ public protocol InputReceiver: AnyObject & Sendable {
     func enqueue(_ event: KeyEvent) async
 }
 ```
-
-Typical usage from a native UI:
-
-```swift
-let controller = GameController(
-    onRender: { state in
-        // Dispatch to main queue, then render to your UI
-        Task { @MainActor in
-            viewController.updateUI(with: state)
-        }
-    },
-    onGameFinished: {
-        Task { @MainActor in
-            viewController.showGameOver()
-        }
-    }
-)
-
-await controller.start()
-await controller.enqueue(.moveLeft)
-await controller.enqueue(.hardDrop)
-```
-
----
 
 ### `KeyEvent`
 
@@ -204,26 +201,6 @@ public enum KeyEvent: Sendable {
 - `esc` toggles pause/resume during play and exits to main menu from game over.
 - `quit` immediately ends the game (triggers game over and score save).
 - `hardDrop` also functions as "start new game" when in the game over state.
-
----
-
-### `GameSessionState`
-
-Immutable snapshot of the full game state, delivered on every render callback.
-
-```swift
-public struct GameSessionState {
-    public let grid: [[BlockState]]          // 10×20 grid of block states
-    public let pieceBlocks: [PieceBlock]     // Current falling piece blocks
-    public let nextPieceBlocks: [PieceBlock] // Next piece preview blocks
-    public let score: Int
-    public let level: Int
-    public let linesCleared: Int
-    public let state: GameState
-    public let topScores: [StoredScore]      // Top 10 high scores
-    public let playerName: String
-}
-```
 
 ---
 

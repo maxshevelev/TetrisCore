@@ -282,7 +282,7 @@ func clearLines_onlyFullRowsRemoved() {
 
 // MARK: - Helper Functions
 
-func isColliding(grid: [[BlockState]], piece: Tetromino, x: Int, y: Int) -> Bool {
+private func isColliding(grid: [[BlockState]], piece: Tetromino, x: Int, y: Int) -> Bool {
     let width = 10
     let height = 20
 
@@ -293,7 +293,7 @@ func isColliding(grid: [[BlockState]], piece: Tetromino, x: Int, y: Int) -> Bool
     return false
 }
 
-func canMoveDown(grid: [[BlockState]], piece: Tetromino, y: Int) -> Bool {
+private func canMoveDown(grid: [[BlockState]], piece: Tetromino, y: Int) -> Bool {
     let width = 10
     let height = 20
 

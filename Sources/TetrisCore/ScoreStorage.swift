@@ -2,7 +2,7 @@
 
 import Foundation
 
-public struct StoredScore: Codable, Equatable {
+public struct StoredScore: Hashable, Codable, Equatable, Sendable {
     public let playerName: String
     public let score: Int
     public let level: Int
