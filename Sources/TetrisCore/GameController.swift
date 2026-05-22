@@ -99,6 +99,7 @@ public actor GameController: InputReceiver {
     private var sentTopScores: [StoredScore]?
     private var sentPlayerName: String?
     private var pendingHardDropDuration: TimeInterval?
+    private var pendingClearedRows: (rows: Set<Int>, duration: TimeInterval)?
 
     public init(
         logger: Logger = Logger(),
@@ -225,6 +226,7 @@ public actor GameController: InputReceiver {
         score = 0
         linesCleared = 0
         sentPlayerName = nil
+        pendingClearedRows = nil
     }
 
     private func restart() {
@@ -380,6 +382,7 @@ public actor GameController: InputReceiver {
         if count == 0 { return }
         score += Self.baseScores[count, default: 0] * (level + 1)
         linesCleared += count
+        pendingClearedRows = (rows: Set(linesToClear), duration: min(dropInterval * 0.5, 0.25))
         log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared)")
         // Remove from bottom to top so indices stay valid
         for y in linesToClear.reversed() {
@@ -440,7 +443,13 @@ public actor GameController: InputReceiver {
         if nextPieceBlocks != sentNextPieceBlocks { events.insert(.nextPieceBlocks(nextPieceBlocks)); sentNextPieceBlocks = nextPieceBlocks }
         if score != sentScore { events.insert(.score(score)); sentScore = score }
         if level != sentLevel { events.insert(.level(level)); sentLevel = level }
-        if linesCleared != sentLinesCleared { events.insert(.linesCleared(linesCleared)); sentLinesCleared = linesCleared }
+        if linesCleared != sentLinesCleared || pendingClearedRows != nil {
+            let rows = pendingClearedRows?.rows ?? []
+            let duration = pendingClearedRows?.duration ?? 0
+            events.insert(.linesCleared(linesCleared, clearedRows: rows, animationDuration: duration))
+            sentLinesCleared = linesCleared
+            pendingClearedRows = nil
+        }
         if displayState != sentDisplayState { events.insert(.state(displayState)); sentDisplayState = displayState }
         if topScores != sentTopScores { events.insert(.topScores(topScores)); sentTopScores = topScores }
         if playerName != sentPlayerName { events.insert(.playerName(playerName)); sentPlayerName = playerName }

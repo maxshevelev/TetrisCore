@@ -10,7 +10,7 @@ public enum GameEvent: Hashable, Sendable {
     case nextPieceBlocks([PieceBlock])
     case score(Int)
     case level(Int)
-    case linesCleared(Int)
+    case linesCleared(Int, clearedRows: Set<Int>, animationDuration: TimeInterval)
     case state(GameDisplayState)
     case topScores([StoredScore])
     case playerName(String)

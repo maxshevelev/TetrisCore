@@ -143,7 +143,7 @@ Each tick yields a `Set<GameEvent>` containing only the values that changed sinc
 | `.nextPieceBlocks` | `[PieceBlock]` | Piece locks (new next piece generated) |
 | `.score` | `Int` | Lines are cleared |
 | `.level` | `Int` | Level advances |
-| `.linesCleared` | `Int` | Lines are cleared |
+| `.linesCleared` | `(Int, clearedRows: Set<Int>, animationDuration: TimeInterval)` | Lines are cleared. `clearedRows` are the grid row indices removed (for animating clear effects), `animationDuration` is the suggested animation time matching game cadence. Both are empty/zero when clearing is not happening. |
 | `.state` | `GameDisplayState` | Pause, resume, game over, restart |
 | `.topScores` | `[StoredScore]` | Game over (new score saved) |
 | `.playerName` | `String` | Game starts |
