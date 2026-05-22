@@ -59,7 +59,7 @@ swift run tetris -d debug -u Alice
 | `j` | Move left |
 | `l` | Move right |
 | `k` | Rotate |
-| `Space` | Hard drop / Start new game |
+| `Space` | Hard drop / Start new game / Resume |
 | `Esc` | Pause / Resume |
 | `q` | Stop playing / Exit from game over |
 

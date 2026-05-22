@@ -61,7 +61,14 @@ class ConsoleInputHandler: @unchecked Sendable {
         case "j": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.moveLeft) }
         case "l": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.moveRight) }
         case "k": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.rotate) }
-        case " ": Task.detached { [weak self] in await self?.inputReceiver?.enqueue(.hardDrop) }
+        case " ": Task.detached { [weak self] in
+            guard let self else { return }
+            if self.currentDisplayState == .paused {
+                await self.inputReceiver?.enqueue(.resume)
+            } else {
+                await self.inputReceiver?.enqueue(.hardDrop)
+            }
+        }
         case "\u{1b}": Task.detached { [weak self] in
             guard let self else { return }
             let event: ControlEvent = self.currentDisplayState == .paused ? .resume : .pause
