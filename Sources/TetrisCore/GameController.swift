@@ -311,7 +311,6 @@ public actor GameController: InputReceiver {
         let startY = currentY
         while canMoveDown() { currentY += 1 }
         stopDropTimer()
-<<<<<<< HEAD
         if isHardDropAnimated, currentY != startY {
             let delay = min(dropInterval * 0.5, 0.25)
             pendingHardDropDuration = delay
@@ -321,19 +320,14 @@ public actor GameController: InputReceiver {
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 guard dropTimerGeneration == gen else { return }
                 guard state == .dropping else { return }
-                transition(to: .locking)
+                pieceBlockedOnLastTick = true
+                transition(to: .dropping)
                 render()
             }
         } else {
-            transition(to: .locking)
+            pieceBlockedOnLastTick = true
+            transition(to: .dropping)
         }
-=======
-        pieceBlockedOnLastTick = false
-        lockPiecePrivate()
-        clearLinesPrivate()
-        spawnNewPiece()
-        transition(to: .dropping)
->>>>>>> b789aed (Remove .locking state and lockTimer — single drop-timer rhythm)
     }
 
     private func canMoveDown() -> Bool {
