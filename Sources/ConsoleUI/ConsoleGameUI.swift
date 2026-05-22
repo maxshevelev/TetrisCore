@@ -32,7 +32,8 @@ public final class ConsoleGameUI: @unchecked Sendable {
             logLevel: logLevel,
             scoreStorage: scoreStorage,
             playerName: playerName,
-            isHardDropAnimated: false
+            isHardDropAnimated: false,
+            isLineClearAnimated: false
         )
         input?.setInputReceiver(controller)
         input?.onExit = { doneSemaphore.signal() }

@@ -81,6 +81,7 @@ public actor GameController: InputReceiver {
     private let scoreStorage: ScoreStorage
     private var playerName: String
     private let isHardDropAnimated: Bool
+    private let isLineClearAnimated: Bool
 
     // MARK: - Streams
 
@@ -106,13 +107,15 @@ public actor GameController: InputReceiver {
         logLevel: LogLevel? = nil,
         scoreStorage: ScoreStorage = ScoreStorage(),
         playerName: String = defaultPlayerName(),
-        isHardDropAnimated: Bool = false
+        isHardDropAnimated: Bool = false,
+        isLineClearAnimated: Bool = false
     ) {
         self.minLogLevel = logLevel
         self.log = logger
         self.scoreStorage = scoreStorage
         self.playerName = playerName
         self.isHardDropAnimated = isHardDropAnimated
+        self.isLineClearAnimated = isLineClearAnimated
         self.grid = Array(repeating: Array(repeating: .empty, count: width), count: height)
 
         var tkc: AsyncStream<Set<GameEvent>>.Continuation!
@@ -186,6 +189,13 @@ public actor GameController: InputReceiver {
             if !canMoveDown() {
                 lockPiecePrivate()
                 clearLinesPrivate()
+                if isLineClearAnimated, let pending = pendingClearedRows {
+                    render()
+                    try? await Task.sleep(nanoseconds: UInt64(pending.duration * 1_000_000_000))
+                    guard state == .locking else { return }
+                    removeClearedRows(Array(pending.rows))
+                    pendingClearedRows = nil
+                }
                 spawnNewPiece()
             }
             transition(to: .dropping)
@@ -384,7 +394,12 @@ public actor GameController: InputReceiver {
         linesCleared += count
         pendingClearedRows = (rows: Set(linesToClear), duration: min(dropInterval * 0.5, 0.25))
         log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared)")
-        // Remove from bottom to top so indices stay valid
+        if isLineClearAnimated { return }
+        removeClearedRows(linesToClear)
+    }
+
+    private func removeClearedRows(_ linesToClear: [Int]) {
+        let count = linesToClear.count
         for y in linesToClear.reversed() {
             grid.remove(at: y)
         }

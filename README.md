@@ -114,7 +114,8 @@ public init(
     logLevel: LogLevel? = nil,
     scoreStorage: ScoreStorage = ScoreStorage(),
     playerName: String = defaultPlayerName(),
-    isHardDropAnimated: Bool = false
+    isHardDropAnimated: Bool = false,
+    isLineClearAnimated: Bool = false
 )
 ```
 
@@ -125,6 +126,7 @@ public init(
 | `scoreStorage` | Backend for persisting top scores to JSON |
 | `playerName` | Display name for score tracking |
 | `isHardDropAnimated` | When `true`, hard drops emit a `hardDropDuration` hint on the `.pieceBlocks` event and delay the lock transition by that duration so the consumer can animate the piece falling. When `false` (default, used by the console UI), hard drops lock immediately with no animation hint. |
+| `isLineClearAnimated` | When `true`, line clears emit `clearedRows` and `animationDuration` on the `.linesCleared` event, and the grid update is deferred until after the animation duration completes. When `false` (default, used by the console UI), lines are cleared immediately with no animation hint. |
 
 #### Update Stream
 
@@ -143,7 +145,7 @@ Each tick yields a `Set<GameEvent>` containing only the values that changed sinc
 | `.nextPieceBlocks` | `[PieceBlock]` | Piece locks (new next piece generated) |
 | `.score` | `Int` | Lines are cleared |
 | `.level` | `Int` | Level advances |
-| `.linesCleared` | `(Int, clearedRows: Set<Int>, animationDuration: TimeInterval)` | Lines are cleared. `clearedRows` are the grid row indices removed (for animating clear effects), `animationDuration` is the suggested animation time matching game cadence. Both are empty/zero when clearing is not happening. |
+| `.linesCleared` | `(Int, clearedRows: Set<Int>, animationDuration: TimeInterval)` | Lines are cleared. When `isLineClearAnimated` is `true`, `clearedRows` contains the grid row indices to animate out over `animationDuration` (derived from drop cadence), and the `.grid` update is deferred until the animation completes. When `false`, both are empty/zero and the grid updates immediately. |
 | `.state` | `GameDisplayState` | Pause, resume, game over, restart |
 | `.topScores` | `[StoredScore]` | Game over (new score saved) |
 | `.playerName` | `String` | Game starts |
