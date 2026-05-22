@@ -11,13 +11,11 @@ public actor GameController: InputReceiver {
 
     private let width = 10
     private let height = 20
-    private let lockDelay: TimeInterval = 0.5
 
     /// All valid state transitions. Any transition not in this table is silently rejected.
     private static let validTransitions: [GameState: Set<GameState>] = [
         .initializing: [.dropping],
-        .dropping: [.locking, .paused, .gameOver, .dropping],
-        .locking: [.dropping, .gameOver],
+        .dropping: [.paused, .gameOver, .dropping],
         .paused: [.dropping, .gameOver],
         .gameOver: [.initializing],
     ]
@@ -29,17 +27,11 @@ public actor GameController: InputReceiver {
             log(.debug,"[State] \(oldValue) -> \(state)")
             switch state {
             case .dropping:
-                stopLockTimer()
                 resetDropTimer()
-            case .locking:
-                stopDropTimer()
-                resetLockTimer()
             case .paused:
                 stopDropTimer()
-                stopLockTimer()
             case .gameOver:
                 stopDropTimer()
-                stopLockTimer()
                 if oldValue != .gameOver {
                     log(.debug,"[Score] Saving score=\(score) level=\(level) player=\(playerName)")
                     scoreStorage.add(score: score, level: level, playerName: playerName)
@@ -140,7 +132,7 @@ public actor GameController: InputReceiver {
     /// Consumer-facing state — collapses internal timer states into `.playing`.
     private var displayState: GameDisplayState {
         switch state {
-        case .dropping, .locking, .initializing: return .playing
+        case .dropping, .initializing: return .playing
         case .paused: return .paused
         case .gameOver: return .gameOver
         }
@@ -150,7 +142,7 @@ public actor GameController: InputReceiver {
 
     private var dropTimer: Task<Void, Never>?
     private var dropTimerGeneration = 0
-    private var lockTimer: Task<Void, Never>?
+    private var pieceBlockedOnLastTick = false
 
     private func resetDropTimer() {
         dropTimer?.cancel()
@@ -162,9 +154,17 @@ public actor GameController: InputReceiver {
             guard state == .dropping else { return }
             if canMoveDown() {
                 currentY += 1
+                pieceBlockedOnLastTick = false
+                transition(to: .dropping)
+            } else if pieceBlockedOnLastTick {
+                lockPiecePrivate()
+                clearLinesPrivate()
+                spawnNewPiece()
+                pieceBlockedOnLastTick = false
                 transition(to: .dropping)
             } else {
-                transition(to: .locking)
+                pieceBlockedOnLastTick = true
+                resetDropTimer()
             }
             render()
         }
@@ -175,26 +175,6 @@ public actor GameController: InputReceiver {
         dropTimer?.cancel()
         dropTimer = nil
         dropTimerGeneration += 1
-    }
-
-    private func resetLockTimer() {
-        lockTimer?.cancel()
-        lockTimer = Task {
-            try? await Task.sleep(nanoseconds: UInt64(lockDelay * 1_000_000_000))
-            guard state == .locking else { return }
-            if !canMoveDown() {
-                lockPiecePrivate()
-                clearLinesPrivate()
-                spawnNewPiece()
-            }
-            transition(to: .dropping)
-            render()
-        }
-    }
-
-    private func stopLockTimer() {
-        lockTimer?.cancel()
-        lockTimer = nil
     }
 
     private func log(_ level: LogLevel, _ message: String) {
@@ -225,6 +205,7 @@ public actor GameController: InputReceiver {
         score = 0
         linesCleared = 0
         sentPlayerName = nil
+        pieceBlockedOnLastTick = false
     }
 
     private func restart() {
@@ -249,7 +230,7 @@ public actor GameController: InputReceiver {
     }
 
     private var isPlaying: Bool {
-        (state == .dropping || state == .locking)
+        state == .dropping
     }
 
     private func startInputListener() {
@@ -330,6 +311,7 @@ public actor GameController: InputReceiver {
         let startY = currentY
         while canMoveDown() { currentY += 1 }
         stopDropTimer()
+<<<<<<< HEAD
         if isHardDropAnimated, currentY != startY {
             let delay = min(dropInterval * 0.5, 0.25)
             pendingHardDropDuration = delay
@@ -345,6 +327,13 @@ public actor GameController: InputReceiver {
         } else {
             transition(to: .locking)
         }
+=======
+        pieceBlockedOnLastTick = false
+        lockPiecePrivate()
+        clearLinesPrivate()
+        spawnNewPiece()
+        transition(to: .dropping)
+>>>>>>> b789aed (Remove .locking state and lockTimer — single drop-timer rhythm)
     }
 
     private func canMoveDown() -> Bool {
