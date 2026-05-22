@@ -80,6 +80,7 @@ public actor GameController: InputReceiver {
 
     private let scoreStorage: ScoreStorage
     private var playerName: String
+    private let isHardDropAnimated: Bool
 
     // MARK: - Streams
 
@@ -97,17 +98,20 @@ public actor GameController: InputReceiver {
     private var sentDisplayState: GameDisplayState?
     private var sentTopScores: [StoredScore]?
     private var sentPlayerName: String?
+    private var pendingHardDropDuration: TimeInterval?
 
     public init(
         logger: Logger = Logger(),
         logLevel: LogLevel? = nil,
         scoreStorage: ScoreStorage = ScoreStorage(),
-        playerName: String = defaultPlayerName()
+        playerName: String = defaultPlayerName(),
+        isHardDropAnimated: Bool = false
     ) {
         self.minLogLevel = logLevel
         self.log = logger
         self.scoreStorage = scoreStorage
         self.playerName = playerName
+        self.isHardDropAnimated = isHardDropAnimated
         self.grid = Array(repeating: Array(repeating: .empty, count: width), count: height)
 
         var tkc: AsyncStream<Set<GameEvent>>.Continuation!
@@ -145,12 +149,16 @@ public actor GameController: InputReceiver {
     // MARK: - Lifecycle
 
     private var dropTimer: Task<Void, Never>?
+    private var dropTimerGeneration = 0
     private var lockTimer: Task<Void, Never>?
 
     private func resetDropTimer() {
         dropTimer?.cancel()
+        let gen = dropTimerGeneration + 1
+        dropTimerGeneration = gen
         dropTimer = Task {
             try? await Task.sleep(nanoseconds: UInt64(dropInterval * 1_000_000_000))
+            guard dropTimerGeneration == gen else { return }
             guard state == .dropping else { return }
             if canMoveDown() {
                 currentY += 1
@@ -166,6 +174,7 @@ public actor GameController: InputReceiver {
     private func stopDropTimer() {
         dropTimer?.cancel()
         dropTimer = nil
+        dropTimerGeneration += 1
     }
 
     private func resetLockTimer() {
@@ -318,8 +327,24 @@ public actor GameController: InputReceiver {
 
     private func hardDropPiece() {
         guard isPlaying else { return }
+        let startY = currentY
         while canMoveDown() { currentY += 1 }
-        transition(to: .locking)
+        stopDropTimer()
+        if isHardDropAnimated, currentY != startY {
+            let delay = min(dropInterval * 0.5, 0.25)
+            pendingHardDropDuration = delay
+            let gen = dropTimerGeneration + 1
+            dropTimerGeneration = gen
+            dropTimer = Task {
+                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+                guard dropTimerGeneration == gen else { return }
+                guard state == .dropping else { return }
+                transition(to: .locking)
+                render()
+            }
+        } else {
+            transition(to: .locking)
+        }
     }
 
     private func canMoveDown() -> Bool {
@@ -407,7 +432,11 @@ public actor GameController: InputReceiver {
 
         var events = Set<GameEvent>()
         if gridCopy != sentGrid { events.insert(.grid(gridCopy)); sentGrid = gridCopy }
-        if pieceBlocks != sentPieceBlocks { events.insert(.pieceBlocks(pieceBlocks)); sentPieceBlocks = pieceBlocks }
+        if pieceBlocks != sentPieceBlocks || pendingHardDropDuration != nil {
+            events.insert(.pieceBlocks(pieceBlocks, hardDropDuration: pendingHardDropDuration))
+            sentPieceBlocks = pieceBlocks
+            pendingHardDropDuration = nil
+        }
         if nextPieceBlocks != sentNextPieceBlocks { events.insert(.nextPieceBlocks(nextPieceBlocks)); sentNextPieceBlocks = nextPieceBlocks }
         if score != sentScore { events.insert(.score(score)); sentScore = score }
         if level != sentLevel { events.insert(.level(level)); sentLevel = level }

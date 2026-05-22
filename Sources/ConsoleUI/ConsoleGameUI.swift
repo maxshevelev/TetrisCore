@@ -31,7 +31,8 @@ public final class ConsoleGameUI: @unchecked Sendable {
             logger: logger,
             logLevel: logLevel,
             scoreStorage: scoreStorage,
-            playerName: playerName
+            playerName: playerName,
+            isHardDropAnimated: false
         )
         input?.setInputReceiver(controller)
         input?.onExit = { doneSemaphore.signal() }
@@ -88,7 +89,7 @@ extension GameEvent {
     var label: String {
         switch self {
         case .grid:             "grid"
-        case .pieceBlocks:      "piece"
+        case .pieceBlocks(_, let d): "piece" + (d.map { "↓\(String(format: "%.2f", $0))s" } ?? "")
         case .nextPieceBlocks:  "next"
         case .score(let v):     "score(\(v))"
         case .level(let v):     "level(\(v))"
@@ -111,12 +112,13 @@ private struct AccumulatedState {
     var displayState: GameDisplayState = .playing
     var topScores: [StoredScore] = []
     var playerName = ""
+    var hardDropDuration: TimeInterval?
 
     mutating func apply(_ events: Set<GameEvent>) {
         for event in events {
             switch event {
             case .grid(let v):        grid = v
-            case .pieceBlocks(let v): pieceBlocks = v
+            case .pieceBlocks(let v, let d): pieceBlocks = v; hardDropDuration = d
             case .nextPieceBlocks(let v): nextPieceBlocks = v
             case .score(let v):       score = v
             case .level(let v):       level = v
@@ -138,7 +140,8 @@ private struct AccumulatedState {
             linesCleared: linesCleared,
             displayState: displayState,
             topScores: topScores,
-            playerName: playerName
+            playerName: playerName,
+            hardDropDuration: hardDropDuration
         )
     }
 }
@@ -154,4 +157,5 @@ public struct RenderSnapshot {
     let displayState: GameDisplayState
     let topScores: [StoredScore]
     let playerName: String
+    let hardDropDuration: TimeInterval?
 }
