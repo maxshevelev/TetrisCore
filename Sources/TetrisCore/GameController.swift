@@ -303,12 +303,7 @@ public actor GameController: InputReceiver {
         let startY = currentY
         while canMoveDown() { currentY += 1 }
         stopDropTimer()
-        if settings.lockImmediatelyAfterHardDrop {
-            lockPiecePrivate()
-            clearLinesPrivate()
-            spawnNewPiece()
-            transition(to: .dropping)
-        } else if settings.isHardDropAnimated, currentY != startY {
+        if settings.isHardDropAnimated, currentY != startY {
             let delay = min(dropInterval * 0.5, 0.25)
             pendingHardDropDuration = delay
             let gen = dropTimerGeneration + 1
@@ -317,10 +312,23 @@ public actor GameController: InputReceiver {
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 guard dropTimerGeneration == gen else { return }
                 guard state == .dropping else { return }
-                pieceBlockedOnLastTick = true
-                transition(to: .dropping)
+                if settings.lockImmediatelyAfterHardDrop {
+                    lockPiecePrivate()
+                    clearLinesPrivate()
+                    spawnNewPiece()
+                    pieceBlockedOnLastTick = false
+                    transition(to: .dropping)
+                } else {
+                    pieceBlockedOnLastTick = true
+                    transition(to: .dropping)
+                }
                 render()
             }
+        } else if settings.lockImmediatelyAfterHardDrop {
+            lockPiecePrivate()
+            clearLinesPrivate()
+            spawnNewPiece()
+            transition(to: .dropping)
         } else {
             pieceBlockedOnLastTick = true
             transition(to: .dropping)
