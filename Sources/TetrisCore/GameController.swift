@@ -193,6 +193,10 @@ public actor GameController: InputReceiver {
                     render()
                     try? await Task.sleep(nanoseconds: UInt64(pending.duration * 1_000_000_000))
                     guard state == .locking else { return }
+                    let count = pending.rows.count
+                    score += Self.baseScores[count, default: 0] * (level + 1)
+                    linesCleared += count
+                    log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared) anim_duration=\(String(format: "%.2f", pending.duration))s")
                     removeClearedRows(Array(pending.rows))
                     pendingClearedRows = nil
                 }
@@ -390,11 +394,15 @@ public actor GameController: InputReceiver {
         let linesToClear = grid.indices.filter { grid[$0].allSatisfy { $0.isFilled } }
         let count = linesToClear.count
         if count == 0 { return }
+        if isLineClearAnimated {
+            pendingClearedRows = (rows: Set(linesToClear), duration: min(dropInterval * 0.5, 0.25))
+            return
+        }
         score += Self.baseScores[count, default: 0] * (level + 1)
         linesCleared += count
-        pendingClearedRows = (rows: Set(linesToClear), duration: min(dropInterval * 0.5, 0.25))
-        log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared)")
-        if isLineClearAnimated { return }
+        let duration = min(dropInterval * 0.5, 0.25)
+        pendingClearedRows = (rows: Set(linesToClear), duration: duration)
+        log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared) anim_duration=\(String(format: "%.2f", duration))s")
         removeClearedRows(linesToClear)
     }
 
