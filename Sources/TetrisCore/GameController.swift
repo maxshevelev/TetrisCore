@@ -358,18 +358,14 @@ public actor GameController: InputReceiver {
         let linesToClear = grid.indices.filter { grid[$0].allSatisfy { $0.isFilled } }
         let count = linesToClear.count
         if count == 0 { return }
+        score += Self.baseScores[count, default: 0] * (level + 1)
+        linesCleared += count
         if settings.isLineClearAnimated {
             let duration = min(dropInterval * 0.5, 0.25)
             pendingClearedRows = (rows: Set(linesToClear), duration: duration)
-            log(.debug,"[Lines] Detected \(count) full row(s): \(linesToClear.sorted()), will emit pre-clear tick then animate over \(String(format: "%.2f", duration))s")
-            return
         }
-        score += Self.baseScores[count, default: 0] * (level + 1)
-        linesCleared += count
-        let duration = min(dropInterval * 0.5, 0.25)
-        pendingClearedRows = (rows: Set(linesToClear), duration: duration)
-        log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared) rows:\(linesToClear.sorted()) anim_duration=\(String(format: "%.2f", duration))s")
         removeClearedRows(linesToClear)
+        log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared) rows:\(linesToClear.sorted())")
     }
 
     private func removeClearedRows(_ linesToClear: [Int]) {

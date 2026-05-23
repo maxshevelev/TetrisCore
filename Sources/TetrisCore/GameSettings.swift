@@ -60,6 +60,7 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
         get { lock.withLock { _hardDropAnimated } }
         set {
             lock.withLock { _hardDropAnimated = newValue }
+            persist()
             notify()
         }
     }
@@ -68,6 +69,7 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
         get { lock.withLock { _lineClearAnimated } }
         set {
             lock.withLock { _lineClearAnimated = newValue }
+            persist()
             notify()
         }
     }
@@ -91,8 +93,9 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
         let stored = Self.loadSettings()
         self._playerName = stored.playerName
         self._lockImmediately = stored.lockImmediately
-        self._hardDropAnimated = false
-        self._lineClearAnimated = false
+        self._hardDropAnimated = stored.hardDropAnimated
+        self._lineClearAnimated = stored.lineClearAnimated
+        persist()
     }
 
     // MARK: - Persistence
@@ -101,6 +104,8 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
         let dict: [String: Any] = [
             "playerName": _playerName,
             "lockImmediatelyAfterHardDrop": _lockImmediately,
+            "isHardDropAnimated": _hardDropAnimated,
+            "isLineClearAnimated": _lineClearAnimated,
         ]
         do {
             try FileManager.default.createDirectory(
@@ -114,14 +119,16 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
         }
     }
 
-    private static func loadSettings() -> (playerName: String, lockImmediately: Bool) {
+    private static func loadSettings() -> (playerName: String, lockImmediately: Bool, hardDropAnimated: Bool, lineClearAnimated: Bool) {
         guard let data = try? Data(contentsOf: appSettingsPath),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return (NSUserName(), false)
+            return (NSUserName(), false, false, false)
         }
         let name = (json["playerName"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? NSUserName()
         let lockImmediately = json["lockImmediatelyAfterHardDrop"] as? Bool ?? false
-        return (name, lockImmediately)
+        let hardDropAnimated = json["isHardDropAnimated"] as? Bool ?? false
+        let lineClearAnimated = json["isLineClearAnimated"] as? Bool ?? false
+        return (name, lockImmediately, hardDropAnimated, lineClearAnimated)
     }
 
     private static var appSettingsPath: URL {
