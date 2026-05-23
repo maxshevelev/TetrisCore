@@ -43,7 +43,9 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
     public var playerName: String {
         get { lock.withLock { _playerName } }
         set {
-            lock.withLock { _playerName = newValue }
+            let trimmed = newValue.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { return }
+            lock.withLock { _playerName = trimmed }
             persist()
             notify()
         }
@@ -79,7 +81,7 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
     public var initialLevel: Int {
         get { lock.withLock { _initialLevel } }
         set {
-            lock.withLock { _initialLevel = newValue }
+            lock.withLock { _initialLevel = min(10, max(1, newValue)) }
             persist()
             notify()
         }
@@ -141,7 +143,7 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
         let lockImmediately = json["lockImmediatelyAfterHardDrop"] as? Bool ?? false
         let hardDropAnimated = json["isHardDropAnimated"] as? Bool ?? false
         let lineClearAnimated = json["isLineClearAnimated"] as? Bool ?? false
-        let initialLevel = json["initialLevel"] as? Int ?? 1
+        let initialLevel = min(10, max(1, (json["initialLevel"] as? Int) ?? 1))
         return (name, lockImmediately, hardDropAnimated, lineClearAnimated, initialLevel)
     }
 
