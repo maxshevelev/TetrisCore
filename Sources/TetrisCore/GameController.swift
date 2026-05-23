@@ -91,6 +91,7 @@ public actor GameController: InputReceiver {
     private var sentPlayerName: String?
     private var pendingHardDropDuration: TimeInterval?
     private var pendingClearedRows: (rows: Set<Int>, duration: TimeInterval)?
+    private var isHardDropAnimating = false
 
     public init(
         logger: Logger = Logger(),
@@ -173,6 +174,7 @@ public actor GameController: InputReceiver {
         dropTimer?.cancel()
         dropTimer = nil
         dropTimerGeneration += 1
+        isHardDropAnimating = false
     }
 
     private func log(_ level: LogLevel, _ message: String) {
@@ -272,7 +274,7 @@ public actor GameController: InputReceiver {
     // MARK: - Input Actions
 
     private func moveLeft() {
-        guard isPlaying else { return }
+        guard isPlaying, !isHardDropAnimating else { return }
         currentX -= 1
         if isColliding() {
             currentX += 1
@@ -280,7 +282,7 @@ public actor GameController: InputReceiver {
     }
 
     private func moveRight() {
-        guard isPlaying else { return }
+        guard isPlaying, !isHardDropAnimating else { return }
         currentX += 1
         if isColliding() {
             currentX -= 1
@@ -288,7 +290,7 @@ public actor GameController: InputReceiver {
     }
 
     private func rotatePiece() {
-        guard isPlaying else { return }
+        guard isPlaying, !isHardDropAnimating else { return }
         guard let piece = currentPiece else { return }
         let rotated = piece.rotated(by: -1)
         let oldPiece = currentPiece
@@ -306,12 +308,14 @@ public actor GameController: InputReceiver {
         if settings.isHardDropAnimated, currentY != startY {
             let delay = min(dropInterval * 0.5, 0.25)
             pendingHardDropDuration = delay
+            isHardDropAnimating = settings.lockImmediatelyAfterHardDrop
             let gen = dropTimerGeneration + 1
             dropTimerGeneration = gen
             dropTimer = Task {
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 guard dropTimerGeneration == gen else { return }
                 guard state == .dropping else { return }
+                isHardDropAnimating = false
                 if settings.lockImmediatelyAfterHardDrop {
                     lockPiecePrivate()
                     clearLinesPrivate()
