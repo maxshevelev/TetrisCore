@@ -17,8 +17,10 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
     public func render(data: RenderSnapshot) -> String {
         let size = terminal.getTerminalSize()
         let grid = data.grid
-        let pieceBlocks = data.pieceBlocks
-        let nextPieceBlocks = data.nextPieceBlocks
+        let pieceCoords = data.pieceCoords
+        let pieceColor = ColorPalette.from(data.pieceColor)
+        let nextCoords = data.nextCoords
+        let nextColor = ColorPalette.from(data.nextColor)
         let score = data.score
         let level = data.level
         let linesCleared = data.linesCleared
@@ -43,6 +45,8 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             output += terminal.bold + playerLine + terminal.reset
         }
 
+        let piecePositions: Set<PieceCoordinate> = pieceCoords
+
         output += terminal.cursorPosition(row: startRow, col: startCol)
         output += terminal.bold + "╔" + String(repeating: "═", count: width * 2) + "╗" + terminal.reset
 
@@ -55,8 +59,8 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
 
                 if currentCell.isFilled {
                     paletteColor = currentCell.color.map(ColorPalette.from)
-                } else if let block = pieceBlocks.first(where: { $0.x == x && $0.y == y }) {
-                    paletteColor = ColorPalette.from(block.color)
+                } else if piecePositions.contains(PieceCoordinate(x: x, y: y)) {
+                    paletteColor = pieceColor
                 } else {
                     paletteColor = nil
                 }
@@ -119,14 +123,14 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             }
 
             // Next piece preview (left side)
-            if !nextPieceBlocks.isEmpty {
+            if !nextCoords.isEmpty {
                 output += terminal.cursorPosition(row: startRow, col: nextCol)
                 output += terminal.bold + "Next:" + terminal.reset
                 for y in 0..<4 {
                     output += terminal.cursorPosition(row: startRow + y + 2, col: nextCol)
                     for x in 0..<4 {
-                        if let block = nextPieceBlocks.first(where: { $0.x == x && $0.y == y }) {
-                            output += ColorPalette.from(block.color).ansiCode + "██" + terminal.reset
+                        if nextCoords.contains(PieceCoordinate(x: x, y: y)) {
+                            output += nextColor.ansiCode + "██" + terminal.reset
                         } else {
                             output += "  "
                         }

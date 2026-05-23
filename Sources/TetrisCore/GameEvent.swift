@@ -6,8 +6,8 @@ import Foundation
 /// Multiple events are yielded as a `Set` each tick — only changed fields appear.
 public enum GameEvent: Hashable, Sendable {
     case grid([[BlockState]])
-    case pieceBlocks([PieceBlock], hardDropDuration: TimeInterval?)
-    case nextPieceBlocks([PieceBlock])
+    case pieceBlocks(Set<PieceCoordinate>, color: TetrominoColor, hardDropDuration: TimeInterval?)
+    case nextPieceBlocks(Set<PieceCoordinate>, color: TetrominoColor)
     case score(Int)
     case level(Int)
     case linesCleared(Int, clearedRows: Set<Int>, animationDuration: TimeInterval)

@@ -92,7 +92,7 @@ extension GameEvent {
     var label: String {
         switch self {
         case .grid:             "grid"
-        case .pieceBlocks(_, let d): "piece" + (d.map { "↓\(String(format: "%.2f", $0))s" } ?? "")
+        case .pieceBlocks(_, _, let d): "piece" + (d.map { "↓\(String(format: "%.2f", $0))s" } ?? "")
         case .nextPieceBlocks:  "next"
         case .score(let v):     "score(\(v))"
         case .level(let v):     "level(\(v))"
@@ -107,8 +107,10 @@ extension GameEvent {
 /// Non-optional accumulated state built from tick events.
 private struct AccumulatedState {
     var grid: [[BlockState]] = []
-    var pieceBlocks: [PieceBlock] = []
-    var nextPieceBlocks: [PieceBlock] = []
+    var pieceCoords: Set<PieceCoordinate> = []
+    var pieceColor: TetrominoColor = .red
+    var nextCoords: Set<PieceCoordinate> = []
+    var nextColor: TetrominoColor = .red
     var score = 0
     var level = 1
     var linesCleared = 0
@@ -123,8 +125,8 @@ private struct AccumulatedState {
         for event in events {
             switch event {
             case .grid(let v):        grid = v
-            case .pieceBlocks(let v, let d): pieceBlocks = v; hardDropDuration = d
-            case .nextPieceBlocks(let v): nextPieceBlocks = v
+            case .pieceBlocks(let v, let c, let d): pieceCoords = v; pieceColor = c; hardDropDuration = d
+            case .nextPieceBlocks(let v, let c): nextCoords = v; nextColor = c
             case .score(let v):       score = v
             case .level(let v):       level = v
             case .linesCleared(let v, let rows, let d): linesCleared = v; clearedRows = rows; clearedRowsAnimationDuration = d
@@ -138,8 +140,10 @@ private struct AccumulatedState {
     func snapshot() -> RenderSnapshot {
         RenderSnapshot(
             grid: grid,
-            pieceBlocks: pieceBlocks,
-            nextPieceBlocks: nextPieceBlocks,
+            pieceCoords: pieceCoords,
+            pieceColor: pieceColor,
+            nextCoords: nextCoords,
+            nextColor: nextColor,
             score: score,
             level: level,
             linesCleared: linesCleared,
@@ -156,8 +160,10 @@ private struct AccumulatedState {
 /// Complete state snapshot for rendering — all fields non-optional.
 public struct RenderSnapshot {
     let grid: [[BlockState]]
-    let pieceBlocks: [PieceBlock]
-    let nextPieceBlocks: [PieceBlock]
+    let pieceCoords: Set<PieceCoordinate>
+    let pieceColor: TetrominoColor
+    let nextCoords: Set<PieceCoordinate>
+    let nextColor: TetrominoColor
     let score: Int
     let level: Int
     let linesCleared: Int

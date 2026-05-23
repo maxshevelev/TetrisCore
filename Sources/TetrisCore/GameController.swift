@@ -81,8 +81,8 @@ public actor GameController: InputReceiver {
     /// Cached values for computing diffs on the tick channel.
     /// nil = never sent (first send includes all fields).
     private var sentGrid: [[BlockState]]?
-    private var sentPieceBlocks: [PieceBlock]?
-    private var sentNextPieceBlocks: [PieceBlock]?
+    private var sentPieceCoords: Set<PieceCoordinate>?
+    private var sentNextPieceCoords: Set<PieceCoordinate>?
     private var sentScore: Int?
     private var sentLevel: Int?
     private var sentLinesCleared: Int?
@@ -407,20 +407,26 @@ public actor GameController: InputReceiver {
     // MARK: - Render
 
     private func render() {
-        let pieceBlocks: [PieceBlock]
+        let pieceCoords: Set<PieceCoordinate>
+        let pieceColor: TetrominoColor
         if let piece = currentPiece {
-            pieceBlocks = piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY)
-                .map { PieceBlock(x: $0.x, y: $0.y, color: piece.shape.blockColor) }
+            pieceCoords = Set(piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY)
+                .map { PieceCoordinate(x: $0.x, y: $0.y) })
+            pieceColor = piece.shape.blockColor
         } else {
-            pieceBlocks = []
+            pieceCoords = []
+            pieceColor = .red
         }
 
-        let nextPieceBlocks: [PieceBlock]
+        let nextCoords: Set<PieceCoordinate>
+        let nextColor: TetrominoColor
         if let next = nextPiece {
-            nextPieceBlocks = next.getAbsoluteCoordinates(xOffset: 0, yOffset: 0)
-                .map { PieceBlock(x: $0.x, y: $0.y, color: next.shape.blockColor) }
+            nextCoords = Set(next.getAbsoluteCoordinates(xOffset: 0, yOffset: 0)
+                .map { PieceCoordinate(x: $0.x, y: $0.y) })
+            nextColor = next.shape.blockColor
         } else {
-            nextPieceBlocks = []
+            nextCoords = []
+            nextColor = .red
         }
 
         let gridCopy = grid
@@ -428,12 +434,12 @@ public actor GameController: InputReceiver {
 
         var events = Set<GameEvent>()
         if gridCopy != sentGrid { events.insert(.grid(gridCopy)); sentGrid = gridCopy }
-        if pieceBlocks != sentPieceBlocks || pendingHardDropDuration != nil {
-            events.insert(.pieceBlocks(pieceBlocks, hardDropDuration: pendingHardDropDuration))
-            sentPieceBlocks = pieceBlocks
+        if pieceCoords != sentPieceCoords || pendingHardDropDuration != nil {
+            events.insert(.pieceBlocks(pieceCoords, color: pieceColor, hardDropDuration: pendingHardDropDuration))
+            sentPieceCoords = pieceCoords
             pendingHardDropDuration = nil
         }
-        if nextPieceBlocks != sentNextPieceBlocks { events.insert(.nextPieceBlocks(nextPieceBlocks)); sentNextPieceBlocks = nextPieceBlocks }
+        if nextCoords != sentNextPieceCoords { events.insert(.nextPieceBlocks(nextCoords, color: nextColor)); sentNextPieceCoords = nextCoords }
         if score != sentScore { events.insert(.score(score)); sentScore = score }
         if level != sentLevel { events.insert(.level(level)); sentLevel = level }
         if linesCleared != sentLinesCleared || pendingClearedRows != nil {

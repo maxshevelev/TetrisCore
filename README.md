@@ -137,8 +137,8 @@ Each tick yields a `Set<GameEvent>` containing only the values that changed sinc
 | Event | Type | Emits when |
 |-------|------|------------|
 | `.grid` | `[[BlockState]]` | Piece locks, lines are cleared |
-| `.pieceBlocks` | `([PieceBlock], hardDropDuration: TimeInterval?)` | Every tick, move, rotate (current piece position). The optional `hardDropDuration` is non-nil when the piece position is the result of a hard drop — the consumer should animate the piece falling to this position over the given duration. `nil` means the move was gravity-driven. |
-| `.nextPieceBlocks` | `[PieceBlock]` | Piece locks (new next piece generated) |
+| `.pieceBlocks` | `(Set<PieceCoordinate>, color: TetrominoColor, hardDropDuration: TimeInterval?)` | Every tick, move, rotate (current piece position). All blocks share the piece's color, carried separately from the coordinate set. The optional `hardDropDuration` is non-nil when the piece position is the result of a hard drop. |
+| `.nextPieceBlocks` | `(Set<PieceCoordinate>, color: TetrominoColor)` | Piece locks (new next piece generated) |
 | `.score` | `Int` | Lines are cleared |
 | `.level` | `Int` | Level advances |
 | `.linesCleared` | `(Int, clearedRows: Set<Int>, animationDuration: TimeInterval)` | Lines are cleared. See [Line-Clear Animation](#line-clear-animation) below. |
@@ -233,6 +233,7 @@ public protocol GameSettings: AnyObject, Sendable {
     var lockImmediatelyAfterHardDrop: Bool { get set }
     var isHardDropAnimated: Bool { get set }
     var isLineClearAnimated: Bool { get set }
+    var initialLevel: Int { get set }
     func addListener(_ listener: SettingsUpdateListener)
     func removeListener(_ listener: SettingsUpdateListener)
 }
@@ -244,28 +245,28 @@ public protocol SettingsUpdateListener: AnyObject, Sendable {
 
 | Property | Persisted | Description |
 |----------|-----------|-------------|
-| `playerName` | Yes | Display name for score tracking |
-| `lockImmediatelyAfterHardDrop` | Yes | When `true`, piece locks instantly after hard drop. Default `false`. |
-| `isHardDropAnimated` | No | When `true`, hard drops emit a `hardDropDuration` hint on `.pieceBlocks`. |
-| `isLineClearAnimated` | No | When `true`, line clears follow a two-phase tick sequence with animation hints. |
+| `playerName` | Yes | Display name for score tracking. Non-empty validation — whitespace-only or empty values are rejected. |
+| `lockImmediatelyAfterHardDrop` | Yes | When `true`, piece locks immediately after hard drop (or after animation if `isHardDropAnimated` is also enabled). |
+| `isHardDropAnimated` | Yes | When `true`, hard drops add a brief visual delay before locking. |
+| `isLineClearAnimated` | Yes | When `true`, line clears follow a two-phase tick sequence with animation hints. |
+| `initialLevel` | Yes | Starting game level (1–10, clamped). Affects drop speed and score multiplier. Default `1`. |
 
 The default implementation is `PersistentGameSettings`, which reads initial values from `settings.json` on init.
 
 ---
 
-### `PieceBlock`
+### `PieceCoordinate`
 
-A single block within the active or preview piece.
+A single coordinate within a piece. All blocks in a piece share the same `TetrominoColor`, which is carried separately in `GameEvent`.
 
 ```swift
-public struct PieceBlock {
+public struct PieceCoordinate: Hashable, Sendable {
     public let x: Int
     public let y: Int
-    public let color: TetrominoColor
 }
 ```
 
-Note: Coordinates are relative to the grid for `pieceBlocks` and relative to the preview box (0–3) for `nextPieceBlocks`.
+Note: Coordinates are grid-absolute for `pieceBlocks` and preview-local (0–3) for `nextPieceBlocks`.
 
 ---
 
@@ -406,7 +407,7 @@ Classical Tetris scoring formula:
 
 **Final score = base × (level + 1)**
 
-Level advances every 10 lines cleared, up to a maximum of level 10. Drop speed increases with level (`0.8s` → `0.15s` minimum interval).
+Level advances every 10 lines cleared from `initialLevel` (default 1), capped at 10. Drop speed increases with level (`0.8s` → `0.15s` minimum interval).
 
 ## Persistent Data
 
