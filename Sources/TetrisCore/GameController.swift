@@ -190,13 +190,16 @@ public actor GameController: InputReceiver {
                 lockPiecePrivate()
                 clearLinesPrivate()
                 if isLineClearAnimated, let pending = pendingClearedRows {
+                    log(.debug,"[Lines] Emitting pre-clear tick: grid snapshot with rows:\(pending.rows.sorted()) + animation hint ↓\(String(format: "%.2f", pending.duration))s")
                     render()
+                    log(.debug,"[Lines] Animation delay start: \(String(format: "%.2f", pending.duration))s")
                     try? await Task.sleep(nanoseconds: UInt64(pending.duration * 1_000_000_000))
-                    guard state == .locking else { return }
+                    guard state == .locking else { log(.debug,"[Lines] Animation interrupted: state=\(state)"); return }
+                    log(.debug,"[Lines] Animation delay end")
                     let count = pending.rows.count
                     score += Self.baseScores[count, default: 0] * (level + 1)
                     linesCleared += count
-                    log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared) rows:\(pending.rows.sorted()) anim_duration=\(String(format: "%.2f", pending.duration))s")
+                    log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared) rows:\(pending.rows.sorted())")
                     removeClearedRows(Array(pending.rows))
                     pendingClearedRows = nil
                 }
@@ -395,7 +398,9 @@ public actor GameController: InputReceiver {
         let count = linesToClear.count
         if count == 0 { return }
         if isLineClearAnimated {
-            pendingClearedRows = (rows: Set(linesToClear), duration: min(dropInterval * 0.5, 0.25))
+            let duration = min(dropInterval * 0.5, 0.25)
+            pendingClearedRows = (rows: Set(linesToClear), duration: duration)
+            log(.debug,"[Lines] Detected \(count) full row(s): \(linesToClear.sorted()), will emit pre-clear tick then animate over \(String(format: "%.2f", duration))s")
             return
         }
         score += Self.baseScores[count, default: 0] * (level + 1)
