@@ -17,7 +17,7 @@ public actor GameController: InputReceiver {
     private static let validTransitions: [GameState: Set<GameState>] = [
         .initializing: [.dropping],
         .dropping: [.locking, .paused, .gameOver, .dropping],
-        .locking: [.dropping, .gameOver],
+        .locking: [.dropping, .gameOver, .paused],
         .paused: [.dropping, .gameOver],
         .gameOver: [.initializing],
     ]
