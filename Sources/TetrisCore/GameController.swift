@@ -120,7 +120,7 @@ public actor GameController: InputReceiver {
     // MARK: - Computed
 
     private var level: Int {
-        min(10, max(1, linesCleared / 10 + 1))
+        min(10, linesCleared / 10 + settings.initialLevel)
     }
 
     private var dropInterval: TimeInterval {

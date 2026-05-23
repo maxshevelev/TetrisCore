@@ -11,6 +11,7 @@ public protocol GameSettings: AnyObject, Sendable {
     var lockImmediatelyAfterHardDrop: Bool { get set }
     var isHardDropAnimated: Bool { get set }
     var isLineClearAnimated: Bool { get set }
+    var initialLevel: Int { get set }
     func addListener(_ listener: SettingsUpdateListener)
     func removeListener(_ listener: SettingsUpdateListener)
 }
@@ -22,6 +23,7 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
     private var _lockImmediately: Bool
     private var _hardDropAnimated: Bool
     private var _lineClearAnimated: Bool
+    private var _initialLevel: Int
 
     private var listeners: [Weak] = []
 
@@ -74,6 +76,15 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
         }
     }
 
+    public var initialLevel: Int {
+        get { lock.withLock { _initialLevel } }
+        set {
+            lock.withLock { _initialLevel = newValue }
+            persist()
+            notify()
+        }
+    }
+
     // MARK: - Listeners
 
     private func notify() {
@@ -95,6 +106,7 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
         self._lockImmediately = stored.lockImmediately
         self._hardDropAnimated = stored.hardDropAnimated
         self._lineClearAnimated = stored.lineClearAnimated
+        self._initialLevel = stored.initialLevel
         persist()
     }
 
@@ -106,6 +118,7 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
             "lockImmediatelyAfterHardDrop": _lockImmediately,
             "isHardDropAnimated": _hardDropAnimated,
             "isLineClearAnimated": _lineClearAnimated,
+            "initialLevel": _initialLevel,
         ]
         do {
             try FileManager.default.createDirectory(
@@ -119,16 +132,17 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
         }
     }
 
-    private static func loadSettings() -> (playerName: String, lockImmediately: Bool, hardDropAnimated: Bool, lineClearAnimated: Bool) {
+    private static func loadSettings() -> (playerName: String, lockImmediately: Bool, hardDropAnimated: Bool, lineClearAnimated: Bool, initialLevel: Int) {
         guard let data = try? Data(contentsOf: appSettingsPath),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return (NSUserName(), false, false, false)
+            return (NSUserName(), false, false, false, 1)
         }
         let name = (json["playerName"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? NSUserName()
         let lockImmediately = json["lockImmediatelyAfterHardDrop"] as? Bool ?? false
         let hardDropAnimated = json["isHardDropAnimated"] as? Bool ?? false
         let lineClearAnimated = json["isLineClearAnimated"] as? Bool ?? false
-        return (name, lockImmediately, hardDropAnimated, lineClearAnimated)
+        let initialLevel = json["initialLevel"] as? Int ?? 1
+        return (name, lockImmediately, hardDropAnimated, lineClearAnimated, initialLevel)
     }
 
     private static var appSettingsPath: URL {
