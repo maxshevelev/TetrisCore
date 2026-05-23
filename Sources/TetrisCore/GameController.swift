@@ -196,7 +196,7 @@ public actor GameController: InputReceiver {
                     let count = pending.rows.count
                     score += Self.baseScores[count, default: 0] * (level + 1)
                     linesCleared += count
-                    log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared) anim_duration=\(String(format: "%.2f", pending.duration))s")
+                    log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared) rows:\(pending.rows.sorted()) anim_duration=\(String(format: "%.2f", pending.duration))s")
                     removeClearedRows(Array(pending.rows))
                     pendingClearedRows = nil
                 }
@@ -402,7 +402,7 @@ public actor GameController: InputReceiver {
         linesCleared += count
         let duration = min(dropInterval * 0.5, 0.25)
         pendingClearedRows = (rows: Set(linesToClear), duration: duration)
-        log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared) anim_duration=\(String(format: "%.2f", duration))s")
+        log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared) rows:\(linesToClear.sorted()) anim_duration=\(String(format: "%.2f", duration))s")
         removeClearedRows(linesToClear)
     }
 

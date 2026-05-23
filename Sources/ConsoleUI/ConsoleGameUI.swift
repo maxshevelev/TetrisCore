@@ -32,8 +32,8 @@ public final class ConsoleGameUI: @unchecked Sendable {
             logLevel: logLevel,
             scoreStorage: scoreStorage,
             playerName: playerName,
-            isHardDropAnimated: false,
-            isLineClearAnimated: false
+            isHardDropAnimated: true,
+            isLineClearAnimated: true
         )
         input?.setInputReceiver(controller)
         input?.onExit = { doneSemaphore.signal() }
@@ -94,7 +94,7 @@ extension GameEvent {
         case .nextPieceBlocks:  "next"
         case .score(let v):     "score(\(v))"
         case .level(let v):     "level(\(v))"
-        case .linesCleared(let v, let rows, _): "lines(\(v))" + (rows.isEmpty ? "" : " rows:\(rows.sorted())")
+        case .linesCleared(let v, let rows, let d): "lines(\(v))" + (rows.isEmpty ? "" : " rows:\(rows.sorted()) ↓\(String(format: "%.2f", d))s")
         case .state(let v):     "state(\(v))"
         case .topScores(let v): "scores(\(v.count))"
         case .playerName(let v): "player(\(v))"
