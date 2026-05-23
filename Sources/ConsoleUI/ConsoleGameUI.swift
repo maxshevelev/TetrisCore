@@ -32,7 +32,8 @@ public final class ConsoleGameUI: @unchecked Sendable {
             logLevel: logLevel,
             scoreStorage: scoreStorage,
             playerName: playerName,
-            isHardDropAnimated: false
+            isHardDropAnimated: true,
+            isLineClearAnimated: true
         )
         input?.setInputReceiver(controller)
         input?.onExit = { doneSemaphore.signal() }
@@ -93,7 +94,7 @@ extension GameEvent {
         case .nextPieceBlocks:  "next"
         case .score(let v):     "score(\(v))"
         case .level(let v):     "level(\(v))"
-        case .linesCleared(let v): "lines(\(v))"
+        case .linesCleared(let v, let rows, let d): "lines(\(v))" + (rows.isEmpty ? "" : " rows:\(rows.sorted()) ↓\(String(format: "%.2f", d))s")
         case .state(let v):     "state(\(v))"
         case .topScores(let v): "scores(\(v.count))"
         case .playerName(let v): "player(\(v))"
@@ -113,6 +114,8 @@ private struct AccumulatedState {
     var topScores: [StoredScore] = []
     var playerName = ""
     var hardDropDuration: TimeInterval?
+    var clearedRows: Set<Int> = []
+    var clearedRowsAnimationDuration: TimeInterval = 0
 
     mutating func apply(_ events: Set<GameEvent>) {
         for event in events {
@@ -122,7 +125,7 @@ private struct AccumulatedState {
             case .nextPieceBlocks(let v): nextPieceBlocks = v
             case .score(let v):       score = v
             case .level(let v):       level = v
-            case .linesCleared(let v): linesCleared = v
+            case .linesCleared(let v, let rows, let d): linesCleared = v; clearedRows = rows; clearedRowsAnimationDuration = d
             case .state(let v):       displayState = v
             case .topScores(let v):   topScores = v
             case .playerName(let v):  playerName = v
@@ -141,7 +144,9 @@ private struct AccumulatedState {
             displayState: displayState,
             topScores: topScores,
             playerName: playerName,
-            hardDropDuration: hardDropDuration
+            hardDropDuration: hardDropDuration,
+            clearedRows: clearedRows,
+            clearedRowsAnimationDuration: clearedRowsAnimationDuration
         )
     }
 }
@@ -158,4 +163,6 @@ public struct RenderSnapshot {
     let topScores: [StoredScore]
     let playerName: String
     let hardDropDuration: TimeInterval?
+    let clearedRows: Set<Int>
+    let clearedRowsAnimationDuration: TimeInterval
 }

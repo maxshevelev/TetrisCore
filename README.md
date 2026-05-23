@@ -114,7 +114,8 @@ public init(
     logLevel: LogLevel? = nil,
     scoreStorage: ScoreStorage = ScoreStorage(),
     playerName: String = defaultPlayerName(),
-    isHardDropAnimated: Bool = false
+    isHardDropAnimated: Bool = false,
+    isLineClearAnimated: Bool = false
 )
 ```
 
@@ -125,6 +126,7 @@ public init(
 | `scoreStorage` | Backend for persisting top scores to JSON |
 | `playerName` | Display name for score tracking |
 | `isHardDropAnimated` | When `true`, hard drops emit a `hardDropDuration` hint on the `.pieceBlocks` event and delay the lock transition by that duration so the consumer can animate the piece falling. When `false` (default, used by the console UI), hard drops lock immediately with no animation hint. |
+| `isLineClearAnimated` | When `true`, line clears emit `clearedRows` and `animationDuration` on the `.linesCleared` event, and the grid update is deferred until after the animation duration completes. When `false` (default, used by the console UI), lines are cleared immediately with no animation hint. |
 
 #### Update Stream
 
@@ -143,10 +145,19 @@ Each tick yields a `Set<GameEvent>` containing only the values that changed sinc
 | `.nextPieceBlocks` | `[PieceBlock]` | Piece locks (new next piece generated) |
 | `.score` | `Int` | Lines are cleared |
 | `.level` | `Int` | Level advances |
-| `.linesCleared` | `Int` | Lines are cleared |
+| `.linesCleared` | `(Int, clearedRows: Set<Int>, animationDuration: TimeInterval)` | Lines are cleared. See [Line-Clear Animation](#line-clear-animation) below. |
 | `.state` | `GameDisplayState` | Pause, resume, game over, restart |
 | `.topScores` | `[StoredScore]` | Game over (new score saved) |
 | `.playerName` | `String` | Game starts |
+
+### Line-Clear Animation
+
+When `isLineClearAnimated` is `true`, line clearing follows a two-phase sequence:
+
+1. **Pre-clear tick**: `.linesCleared(count, clearedRows: {rowIndices}, animationDuration: dur)` fires alongside a `.grid` snapshot showing the locked piece in the still-full rows. The consumer should animate the rows in `clearedRows` out over `animationDuration` (derived from drop cadence: `min(dropInterval * 0.5, 0.25)`).
+2. **Post-clear tick**: After the animation delay, a new `.grid` snapshot fires with the rows removed and the new piece spawned. `.score` and `.linesCleared` update to their new values in this tick.
+
+When `isLineClearAnimated` is `false` (console UI default), `clearedRows` is empty and `animationDuration` is zero — the grid updates immediately with no animation hint.
 
 Consumers accumulate state by switching over events:
 

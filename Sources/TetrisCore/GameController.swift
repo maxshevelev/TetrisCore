@@ -15,7 +15,7 @@ public actor GameController: InputReceiver {
     /// All valid state transitions. Any transition not in this table is silently rejected.
     private static let validTransitions: [GameState: Set<GameState>] = [
         .initializing: [.dropping],
-        .dropping: [.paused, .gameOver, .dropping],
+        .dropping: [.locking, .paused, .gameOver, .dropping],
         .paused: [.dropping, .gameOver],
         .gameOver: [.initializing],
     ]
@@ -73,6 +73,7 @@ public actor GameController: InputReceiver {
     private let scoreStorage: ScoreStorage
     private var playerName: String
     private let isHardDropAnimated: Bool
+    private let isLineClearAnimated: Bool
 
     // MARK: - Streams
 
@@ -91,19 +92,22 @@ public actor GameController: InputReceiver {
     private var sentTopScores: [StoredScore]?
     private var sentPlayerName: String?
     private var pendingHardDropDuration: TimeInterval?
+    private var pendingClearedRows: (rows: Set<Int>, duration: TimeInterval)?
 
     public init(
         logger: Logger = Logger(),
         logLevel: LogLevel? = nil,
         scoreStorage: ScoreStorage = ScoreStorage(),
         playerName: String = defaultPlayerName(),
-        isHardDropAnimated: Bool = false
+        isHardDropAnimated: Bool = false,
+        isLineClearAnimated: Bool = false
     ) {
         self.minLogLevel = logLevel
         self.log = logger
         self.scoreStorage = scoreStorage
         self.playerName = playerName
         self.isHardDropAnimated = isHardDropAnimated
+        self.isLineClearAnimated = isLineClearAnimated
         self.grid = Array(repeating: Array(repeating: .empty, count: width), count: height)
 
         var tkc: AsyncStream<Set<GameEvent>>.Continuation!
@@ -205,6 +209,7 @@ public actor GameController: InputReceiver {
         score = 0
         linesCleared = 0
         sentPlayerName = nil
+        pendingClearedRows = nil
         pieceBlockedOnLastTick = false
     }
 
@@ -361,10 +366,22 @@ public actor GameController: InputReceiver {
         let linesToClear = grid.indices.filter { grid[$0].allSatisfy { $0.isFilled } }
         let count = linesToClear.count
         if count == 0 { return }
+        if isLineClearAnimated {
+            let duration = min(dropInterval * 0.5, 0.25)
+            pendingClearedRows = (rows: Set(linesToClear), duration: duration)
+            log(.debug,"[Lines] Detected \(count) full row(s): \(linesToClear.sorted()), will emit pre-clear tick then animate over \(String(format: "%.2f", duration))s")
+            return
+        }
         score += Self.baseScores[count, default: 0] * (level + 1)
         linesCleared += count
-        log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared)")
-        // Remove from bottom to top so indices stay valid
+        let duration = min(dropInterval * 0.5, 0.25)
+        pendingClearedRows = (rows: Set(linesToClear), duration: duration)
+        log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared) rows:\(linesToClear.sorted()) anim_duration=\(String(format: "%.2f", duration))s")
+        removeClearedRows(linesToClear)
+    }
+
+    private func removeClearedRows(_ linesToClear: [Int]) {
+        let count = linesToClear.count
         for y in linesToClear.reversed() {
             grid.remove(at: y)
         }
@@ -423,7 +440,13 @@ public actor GameController: InputReceiver {
         if nextPieceBlocks != sentNextPieceBlocks { events.insert(.nextPieceBlocks(nextPieceBlocks)); sentNextPieceBlocks = nextPieceBlocks }
         if score != sentScore { events.insert(.score(score)); sentScore = score }
         if level != sentLevel { events.insert(.level(level)); sentLevel = level }
-        if linesCleared != sentLinesCleared { events.insert(.linesCleared(linesCleared)); sentLinesCleared = linesCleared }
+        if linesCleared != sentLinesCleared || pendingClearedRows != nil {
+            let rows = pendingClearedRows?.rows ?? []
+            let duration = pendingClearedRows?.duration ?? 0
+            events.insert(.linesCleared(linesCleared, clearedRows: rows, animationDuration: duration))
+            sentLinesCleared = linesCleared
+            pendingClearedRows = nil
+        }
         if displayState != sentDisplayState { events.insert(.state(displayState)); sentDisplayState = displayState }
         if topScores != sentTopScores { events.insert(.topScores(topScores)); sentTopScores = topScores }
         if playerName != sentPlayerName { events.insert(.playerName(playerName)); sentPlayerName = playerName }
