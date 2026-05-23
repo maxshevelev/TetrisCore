@@ -227,7 +227,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             lines.append(OverlayLine.plain(""))
             lines.append(OverlayLine.bold("Top Scores"))
             for (i, entry) in topScores.enumerated() {
-                let rankText = String(format: "%d. %@ %d  (lvl %d)", i + 1, entry.playerName, entry.score, entry.level)
+                let rankText = String(format: "%d. %@ %d", i + 1, entry.playerName, entry.score)
                 let isCurrent = entry.score == score && entry.playerName == playerName
                 if isCurrent {
                     lines.append(OverlayLine.plain("  " + rankText + " ←"))
@@ -239,7 +239,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
 
         lines.append(OverlayLine.plain(""))
         lines.append(OverlayLine.plain("Press SPACE for new game"))
-        lines.append(OverlayLine.plain("Press ESC to exit"))
+        lines.append(OverlayLine.plain("Press q to exit"))
 
         return renderOverlay(
             lines: lines,

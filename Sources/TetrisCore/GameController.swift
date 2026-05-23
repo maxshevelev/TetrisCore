@@ -34,7 +34,7 @@ public actor GameController: InputReceiver {
                 stopDropTimer()
                 if oldValue != .gameOver {
                     log(.debug,"[Score] Saving score=\(score) level=\(level) player=\(playerName)")
-                    scoreStorage.add(score: score, level: level, playerName: playerName)
+                    scoreStorage.add(score: score, playerName: playerName)
                 }
             default: break
             }
@@ -70,10 +70,11 @@ public actor GameController: InputReceiver {
 
     // MARK: - Score Storage
 
-    private let scoreStorage: ScoreStorage
+    private let scoreStorage: SettingsStorage
     private var playerName: String
     private let isHardDropAnimated: Bool
     private let isLineClearAnimated: Bool
+    private let lockImmediatelyAfterHardDrop: Bool
 
     // MARK: - Streams
 
@@ -97,10 +98,11 @@ public actor GameController: InputReceiver {
     public init(
         logger: Logger = Logger(),
         logLevel: LogLevel? = nil,
-        scoreStorage: ScoreStorage = ScoreStorage(),
+        scoreStorage: SettingsStorage = SettingsStorage(),
         playerName: String = defaultPlayerName(),
         isHardDropAnimated: Bool = false,
-        isLineClearAnimated: Bool = false
+        isLineClearAnimated: Bool = false,
+        lockImmediatelyAfterHardDrop: Bool = false
     ) {
         self.minLogLevel = logLevel
         self.log = logger
@@ -108,6 +110,7 @@ public actor GameController: InputReceiver {
         self.playerName = playerName
         self.isHardDropAnimated = isHardDropAnimated
         self.isLineClearAnimated = isLineClearAnimated
+        self.lockImmediatelyAfterHardDrop = lockImmediatelyAfterHardDrop
         self.grid = Array(repeating: Array(repeating: .empty, count: width), count: height)
 
         var tkc: AsyncStream<Set<GameEvent>>.Continuation!
@@ -316,7 +319,12 @@ public actor GameController: InputReceiver {
         let startY = currentY
         while canMoveDown() { currentY += 1 }
         stopDropTimer()
-        if isHardDropAnimated, currentY != startY {
+        if lockImmediatelyAfterHardDrop {
+            lockPiecePrivate()
+            clearLinesPrivate()
+            spawnNewPiece()
+            transition(to: .dropping)
+        } else if isHardDropAnimated, currentY != startY {
             let delay = min(dropInterval * 0.5, 0.25)
             pendingHardDropDuration = delay
             let gen = dropTimerGeneration + 1

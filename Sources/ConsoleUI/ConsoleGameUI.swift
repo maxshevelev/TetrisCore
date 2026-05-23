@@ -23,7 +23,7 @@ public final class ConsoleGameUI: @unchecked Sendable {
         input?.start()
 
         let renderer = ConsoleRenderer(terminal: TerminalAdapter())
-        let scoreStorage = ScoreStorage()
+        let scoreStorage = SettingsStorage()
 
         let doneSemaphore = DispatchSemaphore(value: 0)
 
@@ -32,8 +32,9 @@ public final class ConsoleGameUI: @unchecked Sendable {
             logLevel: logLevel,
             scoreStorage: scoreStorage,
             playerName: playerName,
-            isHardDropAnimated: true,
-            isLineClearAnimated: true
+            isHardDropAnimated: false,
+            isLineClearAnimated: false,
+            lockImmediatelyAfterHardDrop: lockImmediatelyAfterHardDrop()
         )
         input?.setInputReceiver(controller)
         input?.onExit = { doneSemaphore.signal() }

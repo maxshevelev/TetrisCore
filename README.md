@@ -22,7 +22,7 @@ The project is split into three targets with strict layer separation:
 │  ─ GameController (actor)                   │
 │  ─ GameEvent (diff-style event enum)        │
 │  ─ Tetromino, TetrominoShape definitions    │
-│  ─ ScoreStorage (JSON persistence)          │
+│  ─ SettingsStorage (JSON persistence)          │
 │  ─ InputReceiver / ControlEvent protocol    │
 └─────────────────────────────────────────────┘
 ```
@@ -82,7 +82,7 @@ Add to your `Package.swift`:
 
 ```swift
 dependencies: [
-    .package(url: "https://github.com/maxshevelev/TetrisCore", from: "0.1.0"),
+    .package(url: "https://github.com/maxshevelev/TetrisCore", from: "0.2.0"),
 ],
 targets: [
     .target(
@@ -112,7 +112,7 @@ public actor GameController: InputReceiver
 public init(
     logger: Logger = Logger(),
     logLevel: LogLevel? = nil,
-    scoreStorage: ScoreStorage = ScoreStorage(),
+    scoreStorage: SettingsStorage = SettingsStorage(),
     playerName: String = defaultPlayerName(),
     isHardDropAnimated: Bool = false,
     isLineClearAnimated: Bool = false
@@ -309,7 +309,7 @@ public enum TetrominoColor: Sendable {
 
 ---
 
-### `ScoreStorage` & `StoredScore`
+### `SettingsStorage` & `StoredScore`
 
 Persistent top-10 score storage backed by a local JSON file.
 
@@ -317,19 +317,18 @@ Persistent top-10 score storage backed by a local JSON file.
 public struct StoredScore: Codable, Equatable {
     public let playerName: String
     public let score: Int
-    public let level: Int
 
-    public init(playerName: String = defaultPlayerName(), score: Int, level: Int)
+    public init(playerName: String = defaultPlayerName(), score: Int)
 }
 
-public final class ScoreStorage: Sendable {
+public final class SettingsStorage: Sendable {
     /// Default path: ~/.tetris/scores.json on macOS,
     /// ~/Library/Application Support/Tetris/scores.json on iOS.
     /// Pass a custom filePath for sandboxed environments.
     public init(filePath: URL? = nil)
 
     @discardableResult
-    public func add(score: Int, level: Int, playerName: String = defaultPlayerName()) -> [StoredScore]
+    public func add(score: Int, playerName: String = defaultPlayerName()) -> [StoredScore]
 
     public func topScores() -> [StoredScore]
 }
@@ -340,7 +339,7 @@ On iOS, provide a sandbox-relative path:
 ```swift
 let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
 let scoresPath = documents.appendingPathComponent("scores.json")
-let storage = ScoreStorage(filePath: scoresPath)
+let storage = SettingsStorage(filePath: scoresPath)
 ```
 
 ---
@@ -389,5 +388,5 @@ Level advances every 10 lines cleared, up to a maximum of level 10. Drop speed i
 
 | File | Path (macOS) | Path (iOS) | Content |
 |------|-------------|------------|---------|
-| Scores | `~/.tetris/scores.json` | `~/Library/Application Support/Tetris/scores.json` | Top 10 scores with player name and level |
+| Scores | `~/.tetris/scores.json` | `~/Library/Application Support/Tetris/scores.json` | Top 10 scores with player name |
 | Settings | `~/.tetris/settings.json` | `~/Library/Application Support/Tetris/settings.json` | Player name preference |

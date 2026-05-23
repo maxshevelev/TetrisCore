@@ -1,20 +1,18 @@
-// ScoreStorage.swift – Persistent top-scores backed by a JSON file
+// SettingsStorage.swift – Persistent top-scores and settings backed by JSON files
 
 import Foundation
 
 public struct StoredScore: Hashable, Codable, Equatable, Sendable {
     public let playerName: String
     public let score: Int
-    public let level: Int
 
-    public init(playerName: String = defaultPlayerName(), score: Int, level: Int) {
+    public init(playerName: String = defaultPlayerName(), score: Int) {
         self.playerName = playerName
         self.score = score
-        self.level = level
     }
 }
 
-public final class ScoreStorage: Sendable {
+public final class SettingsStorage: Sendable {
     private let filePath: URL
     private let lock = NSLock()
 
@@ -30,11 +28,11 @@ public final class ScoreStorage: Sendable {
 
     /// Saves a new score then keeps only the top 10.
     @discardableResult
-    public func add(score: Int, level: Int, playerName: String = defaultPlayerName()) -> [StoredScore] {
+    public func add(score: Int, playerName: String = defaultPlayerName()) -> [StoredScore] {
         lock.lock()
         defer { lock.unlock() }
-        let newEntry = StoredScore(playerName: playerName, score: score, level: level)
-        guard !loadScoresPrivate().contains(where: { $0.score == score && $0.playerName == playerName && $0.level == level }) else {
+        let newEntry = StoredScore(playerName: playerName, score: score)
+        guard !loadScoresPrivate().contains(where: { $0.score == score && $0.playerName == playerName }) else {
             return loadScoresPrivate()
         }
         var scores = loadScoresPrivate()
@@ -108,6 +106,37 @@ public func storePlayerName(_ name: String) {
         settings = json
     }
     settings["playerName"] = name
+    do {
+        try FileManager.default.createDirectory(
+            at: appSettingsPath.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let data = try JSONSerialization.data(withJSONObject: settings, options: [.sortedKeys])
+        try data.write(to: appSettingsPath, options: .atomic)
+    } catch {
+        // Best-effort - silent fail
+    }
+}
+
+// MARK: - Hard-drop lock setting
+
+public func lockImmediatelyAfterHardDrop() -> Bool {
+    if let data = try? Data(contentsOf: appSettingsPath),
+       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+       let value = json["lockImmediatelyAfterHardDrop"] as? Bool {
+        return value
+    }
+    storeLockImmediatelyAfterHardDrop(false)
+    return false
+}
+
+public func storeLockImmediatelyAfterHardDrop(_ value: Bool) {
+    var settings: [String: Any] = [:]
+    if let data = try? Data(contentsOf: appSettingsPath),
+       let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+        settings = json
+    }
+    settings["lockImmediatelyAfterHardDrop"] = value
     do {
         try FileManager.default.createDirectory(
             at: appSettingsPath.deletingLastPathComponent(),
