@@ -73,7 +73,7 @@ case "\u{1b}":  // ESC key sends this first, triggers pause
 ### Medium Priority
 
 #### 4. Score Deduplication Logic (MEDIUM)
-**Location**: `SettingsStorage.swift:37-39`
+**Location**: `ScoreStorage.swift:37-39`
 
 ```swift
 guard !loadScoresPrivate().contains(where: { 
@@ -88,7 +88,7 @@ guard !loadScoresPrivate().contains(where: {
 **Recommendation**: Consider whether deduplication should be based on `(playerName, score)` only, or add a timestamp component.
 
 #### 5. Player Name Validation (MEDIUM)
-**Location**: `SettingsStorage.swift:104-121`
+**Location**: `ScoreStorage.swift:104-121`
 
 ```swift
 public func storePlayerName(_ name: String) {
@@ -292,7 +292,7 @@ While all 19 tests pass, there are compiler warnings:
 | `ConsoleGameUI.swift` | 162 | ⚠️ Needs work | Sendable issues, no restart loop |
 | `ConsoleInputHandler.swift` | 98 | ⚠️ Needs work | Missing escape sequences |
 | `ConsoleRenderer.swift` | 250 | ⚠️ Needs work | Large render method, linear searches |
-| `SettingsStorage.swift` | 122 | ✅ Good | Thread-safe, minor validation issue |
+| `ScoreStorage.swift` | 122 | ✅ Good | Thread-safe, minor validation issue |
 | `Tetromino.swift` | 85 | ✅ Good | Immutable, Sendable |
 | `GameState.swift` | 18 | ✅ Good | Already has Sendable |
 | `GameEvent.swift` | ~50 | ✅ Good | Diff-style events well-designed |

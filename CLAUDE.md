@@ -28,7 +28,7 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 | `Sources/TetrisCore/GameDisplayState.swift` | Consumer-facing state enum (playing/paused/gameOver) — included in `GameEvent` |
 | `Sources/TetrisCore/LogLevel.swift` | Log level enum — `allows` gates messages, used by `log(level, .)` |
 | `Sources/ConsoleUI/ColorPalette.swift` | ANSI color palette, maps `TetrominoColor` → `ColorPalette` |
-| `Sources/TetrisCore/SettingsStorage.swift` | JSON persistence for top-10 scores, thread-safe |
+| `Sources/TetrisCore/ScoreStorage.swift` | JSON persistence for top-10 scores, thread-safe |
 | `Sources/TetrisCore/GameEvent.swift` | Diff-style update event enum — each variant carries changed data; unused variants omitted from set |
 | `Sources/ConsoleUI/ConsoleGameUI.swift` | Facade: adapter pattern, lifecycle management |
 | `Sources/ConsoleUI/TerminalAdapter.swift` | Terminal operations abstraction |

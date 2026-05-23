@@ -7,9 +7,9 @@ import os
 public final class ConsoleGameUI: @unchecked Sendable {
     private var input: ConsoleInputHandler?
     private let logger: Logger
-    private let playerName: String
+    private let playerName: String?
 
-    public init(logger: Logger = Logger(), playerName: String = defaultPlayerName()) {
+    public init(logger: Logger = Logger(), playerName: String? = nil) {
         self.input = ConsoleInputHandler()
         self.logger = logger
         self.playerName = playerName
@@ -23,7 +23,11 @@ public final class ConsoleGameUI: @unchecked Sendable {
         input?.start()
 
         let renderer = ConsoleRenderer(terminal: TerminalAdapter())
-        let scoreStorage = SettingsStorage()
+        let scoreStorage = ScoreStorage()
+        let settings = PersistentGameSettings()
+        if let playerName {
+            settings.playerName = playerName
+        }
 
         let doneSemaphore = DispatchSemaphore(value: 0)
 
@@ -31,10 +35,7 @@ public final class ConsoleGameUI: @unchecked Sendable {
             logger: logger,
             logLevel: logLevel,
             scoreStorage: scoreStorage,
-            playerName: playerName,
-            isHardDropAnimated: false,
-            isLineClearAnimated: false,
-            lockImmediatelyAfterHardDrop: lockImmediatelyAfterHardDrop()
+            settings: settings
         )
         input?.setInputReceiver(controller)
         input?.onExit = { doneSemaphore.signal() }

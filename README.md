@@ -22,7 +22,7 @@ The project is split into three targets with strict layer separation:
 │  ─ GameController (actor)                   │
 │  ─ GameEvent (diff-style event enum)        │
 │  ─ Tetromino, TetrominoShape definitions    │
-│  ─ SettingsStorage (JSON persistence)          │
+│  ─ ScoreStorage (JSON persistence)          │
 │  ─ InputReceiver / ControlEvent protocol    │
 └─────────────────────────────────────────────┘
 ```
@@ -112,10 +112,8 @@ public actor GameController: InputReceiver
 public init(
     logger: Logger = Logger(),
     logLevel: LogLevel? = nil,
-    scoreStorage: SettingsStorage = SettingsStorage(),
-    playerName: String = defaultPlayerName(),
-    isHardDropAnimated: Bool = false,
-    isLineClearAnimated: Bool = false
+    scoreStorage: ScoreStorage = ScoreStorage(),
+    settings: any GameSettings = PersistentGameSettings()
 )
 ```
 
@@ -124,9 +122,7 @@ public init(
 | `logger` | Apple `os.Logger` instance for debug output |
 | `logLevel` | Optional minimum log level for filtering |
 | `scoreStorage` | Backend for persisting top scores to JSON |
-| `playerName` | Display name for score tracking |
-| `isHardDropAnimated` | When `true`, hard drops emit a `hardDropDuration` hint on the `.pieceBlocks` event and delay the lock transition by that duration so the consumer can animate the piece falling. When `false` (default, used by the console UI), hard drops lock immediately with no animation hint. |
-| `isLineClearAnimated` | When `true`, line clears emit `clearedRows` and `animationDuration` on the `.linesCleared` event, and the grid update is deferred until after the animation duration completes. When `false` (default, used by the console UI), lines are cleared immediately with no animation hint. |
+| `settings` | Runtime settings via `GameSettings` protocol (see below). Defaults to `PersistentGameSettings` which reads/writes `settings.json`. |
 
 #### Update Stream
 
@@ -175,6 +171,15 @@ Task {
 }
 ```
 
+#### Properties
+
+```swift
+/// Runtime settings — read or modify to change behavior at any time.
+/// Persisted settings (playerName, lockImmediatelyAfterHardDrop) are
+/// written to settings.json on set.
+public let settings: any GameSettings
+```
+
 #### Methods
 
 ```swift
@@ -215,6 +220,36 @@ public enum ControlEvent: Sendable {
 - `stop` ends the current game (transitions to game over and saves the score).
 - `hardDrop` also functions as "start new game" when in the game over state.
 - Events that don't match the current game state are silently ignored.
+
+---
+
+### `GameSettings`
+
+Runtime settings exposed via `controller.settings`. Persisted settings are written to `settings.json` on set.
+
+```swift
+public protocol GameSettings: AnyObject, Sendable {
+    var playerName: String { get set }
+    var lockImmediatelyAfterHardDrop: Bool { get set }
+    var isHardDropAnimated: Bool { get set }
+    var isLineClearAnimated: Bool { get set }
+    func addListener(_ listener: SettingsUpdateListener)
+    func removeListener(_ listener: SettingsUpdateListener)
+}
+
+public protocol SettingsUpdateListener: AnyObject, Sendable {
+    func settingsDidUpdate(_ settings: any GameSettings)
+}
+```
+
+| Property | Persisted | Description |
+|----------|-----------|-------------|
+| `playerName` | Yes | Display name for score tracking |
+| `lockImmediatelyAfterHardDrop` | Yes | When `true`, piece locks instantly after hard drop. Default `false`. |
+| `isHardDropAnimated` | No | When `true`, hard drops emit a `hardDropDuration` hint on `.pieceBlocks`. |
+| `isLineClearAnimated` | No | When `true`, line clears follow a two-phase tick sequence with animation hints. |
+
+The default implementation is `PersistentGameSettings`, which reads initial values from `settings.json` on init.
 
 ---
 
@@ -309,7 +344,7 @@ public enum TetrominoColor: Sendable {
 
 ---
 
-### `SettingsStorage` & `StoredScore`
+### `ScoreStorage` & `StoredScore`
 
 Persistent top-10 score storage backed by a local JSON file.
 
@@ -318,17 +353,17 @@ public struct StoredScore: Codable, Equatable {
     public let playerName: String
     public let score: Int
 
-    public init(playerName: String = defaultPlayerName(), score: Int)
+    public init(playerName: String = "", score: Int)
 }
 
-public final class SettingsStorage: Sendable {
+public final class ScoreStorage: Sendable {
     /// Default path: ~/.tetris/scores.json on macOS,
     /// ~/Library/Application Support/Tetris/scores.json on iOS.
     /// Pass a custom filePath for sandboxed environments.
     public init(filePath: URL? = nil)
 
     @discardableResult
-    public func add(score: Int, playerName: String = defaultPlayerName()) -> [StoredScore]
+    public func add(score: Int, playerName: String) -> [StoredScore]
 
     public func topScores() -> [StoredScore]
 }
@@ -339,7 +374,7 @@ On iOS, provide a sandbox-relative path:
 ```swift
 let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
 let scoresPath = documents.appendingPathComponent("scores.json")
-let storage = SettingsStorage(filePath: scoresPath)
+let storage = ScoreStorage(filePath: scoresPath)
 ```
 
 ---
@@ -357,17 +392,6 @@ public enum LogLevel: String, CaseIterable, Sendable {
 A level permits messages at itself and higher (debug < info < notice < error < fault).
 
 ---
-
-### Player Name Utilities
-
-```swift
-/// Returns the persisted player name, or the system username as fallback.
-/// On macOS reads from ~/.tetris/settings.json, on iOS from Application Support.
-public func defaultPlayerName() -> String
-
-/// Persist a player name.
-public func storePlayerName(_ name: String)
-```
 
 ## Scoring
 
@@ -389,4 +413,3 @@ Level advances every 10 lines cleared, up to a maximum of level 10. Drop speed i
 | File | Path (macOS) | Path (iOS) | Content |
 |------|-------------|------------|---------|
 | Scores | `~/.tetris/scores.json` | `~/Library/Application Support/Tetris/scores.json` | Top 10 scores with player name |
-| Settings | `~/.tetris/settings.json` | `~/Library/Application Support/Tetris/settings.json` | Player name preference |

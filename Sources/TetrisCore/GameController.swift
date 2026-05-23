@@ -33,8 +33,8 @@ public actor GameController: InputReceiver {
             case .gameOver:
                 stopDropTimer()
                 if oldValue != .gameOver {
-                    log(.debug,"[Score] Saving score=\(score) level=\(level) player=\(playerName)")
-                    scoreStorage.add(score: score, playerName: playerName)
+                    log(.debug,"[Score] Saving score=\(score) level=\(level) player=\(settings.playerName)")
+                    scoreStorage.add(score: score, playerName: settings.playerName)
                 }
             default: break
             }
@@ -70,11 +70,8 @@ public actor GameController: InputReceiver {
 
     // MARK: - Score Storage
 
-    private let scoreStorage: SettingsStorage
-    private var playerName: String
-    private let isHardDropAnimated: Bool
-    private let isLineClearAnimated: Bool
-    private let lockImmediatelyAfterHardDrop: Bool
+    private let scoreStorage: ScoreStorage
+    public let settings: any GameSettings
 
     // MARK: - Streams
 
@@ -98,19 +95,13 @@ public actor GameController: InputReceiver {
     public init(
         logger: Logger = Logger(),
         logLevel: LogLevel? = nil,
-        scoreStorage: SettingsStorage = SettingsStorage(),
-        playerName: String = defaultPlayerName(),
-        isHardDropAnimated: Bool = false,
-        isLineClearAnimated: Bool = false,
-        lockImmediatelyAfterHardDrop: Bool = false
+        scoreStorage: ScoreStorage = ScoreStorage(),
+        settings: any GameSettings = PersistentGameSettings()
     ) {
         self.minLogLevel = logLevel
         self.log = logger
         self.scoreStorage = scoreStorage
-        self.playerName = playerName
-        self.isHardDropAnimated = isHardDropAnimated
-        self.isLineClearAnimated = isLineClearAnimated
-        self.lockImmediatelyAfterHardDrop = lockImmediatelyAfterHardDrop
+        self.settings = settings
         self.grid = Array(repeating: Array(repeating: .empty, count: width), count: height)
 
         var tkc: AsyncStream<Set<GameEvent>>.Continuation!
@@ -230,13 +221,6 @@ public actor GameController: InputReceiver {
         await inputBuffer.send(event)
     }
 
-    /// Update the player name for the next game.
-    /// Takes effect on the next game start — safe to call at any time.
-    public func setPlayerName(_ name: String) {
-        playerName = name
-        sentPlayerName = name
-    }
-
     private var isPlaying: Bool {
         state == .dropping
     }
@@ -319,12 +303,12 @@ public actor GameController: InputReceiver {
         let startY = currentY
         while canMoveDown() { currentY += 1 }
         stopDropTimer()
-        if lockImmediatelyAfterHardDrop {
+        if settings.lockImmediatelyAfterHardDrop {
             lockPiecePrivate()
             clearLinesPrivate()
             spawnNewPiece()
             transition(to: .dropping)
-        } else if isHardDropAnimated, currentY != startY {
+        } else if settings.isHardDropAnimated, currentY != startY {
             let delay = min(dropInterval * 0.5, 0.25)
             pendingHardDropDuration = delay
             let gen = dropTimerGeneration + 1
@@ -374,7 +358,7 @@ public actor GameController: InputReceiver {
         let linesToClear = grid.indices.filter { grid[$0].allSatisfy { $0.isFilled } }
         let count = linesToClear.count
         if count == 0 { return }
-        if isLineClearAnimated {
+        if settings.isLineClearAnimated {
             let duration = min(dropInterval * 0.5, 0.25)
             pendingClearedRows = (rows: Set(linesToClear), duration: duration)
             log(.debug,"[Lines] Detected \(count) full row(s): \(linesToClear.sorted()), will emit pre-clear tick then animate over \(String(format: "%.2f", duration))s")
@@ -457,7 +441,7 @@ public actor GameController: InputReceiver {
         }
         if displayState != sentDisplayState { events.insert(.state(displayState)); sentDisplayState = displayState }
         if topScores != sentTopScores { events.insert(.topScores(topScores)); sentTopScores = topScores }
-        if playerName != sentPlayerName { events.insert(.playerName(playerName)); sentPlayerName = playerName }
+        if settings.playerName != sentPlayerName { events.insert(.playerName(settings.playerName)); sentPlayerName = settings.playerName }
         guard !events.isEmpty else { return }
         tickContinuation.yield(events)
     }
