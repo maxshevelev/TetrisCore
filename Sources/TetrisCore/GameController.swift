@@ -15,7 +15,7 @@ public actor GameController: InputReceiver {
     /// All valid state transitions. Any transition not in this table is silently rejected.
     private static let validTransitions: [GameState: Set<GameState>] = [
         .initializing: [.dropping],
-        .dropping: [.locking, .paused, .gameOver, .dropping],
+        .dropping: [.paused, .gameOver, .dropping],
         .paused: [.dropping, .gameOver],
         .gameOver: [.initializing],
     ]
