@@ -200,7 +200,7 @@ public actor GameController: InputReceiver {
                     score += Self.baseScores[count, default: 0] * (level + 1)
                     linesCleared += count
                     log(.debug,"[Lines] Cleared \(count) line(s), score=\(score) total_lines=\(linesCleared) rows:\(pending.rows.sorted())")
-                    removeClearedRows(Array(pending.rows))
+                    removeClearedRows(pending.rows.sorted())
                     pendingClearedRows = nil
                 }
                 spawnNewPiece()
