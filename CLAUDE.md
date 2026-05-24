@@ -48,6 +48,8 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 - `GameDisplayState`, `TetrominoColor`, `Tetromino`, `TetrominoShape`, `ColorPalette` are all `Sendable`. `GameState` is internal.
 - State machine: all state changes go through `transition(to:)` backed by `validTransitions` table — invalid transitions are silently rejected with a debug log. Timer lifecycle is managed exclusively in `state.didSet`, never called directly.
 
+⚠️ **DO NOT remove `SettingsUpdateListener` / `addListener` / `removeListener` from `GameSettings`** — it is a public API for package consumers, even though zero local consumers exist in this repo.
+
 ## Active Tasks & Status
 
 - ✅ ArgumentParser integration — `-d` / `--user` flags working

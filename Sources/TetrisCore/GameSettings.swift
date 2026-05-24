@@ -87,12 +87,11 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
         }
     }
 
-    // MARK: - Listeners
+    // MARK: - Notification
 
     private func notify() {
-        lock.withLock {
-            listeners.removeAll { $0.value == nil }
-        }
+        // Listeners may trigger property setters which acquire this lock.
+        // notify() must NOT hold the lock — that would deadlock.
         for w in listeners {
             w.value?.settingsDidUpdate(self)
         }
