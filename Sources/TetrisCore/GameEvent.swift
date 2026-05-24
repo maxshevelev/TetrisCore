@@ -13,5 +13,6 @@ public enum GameEvent: Hashable, Sendable {
     case linesCleared(Int, clearedRows: Set<Int>, animationDuration: TimeInterval)
     case state(GameDisplayState)
     case topScores([StoredScore])
+    case gridSize(width: Int, height: Int)
     case playerName(String)
 }

@@ -17,6 +17,8 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
     public func render(data: RenderSnapshot) -> String {
         let size = terminal.getTerminalSize()
         let grid = data.grid
+        let width = data.gridSize.width
+        let height = data.gridSize.height
         let pieceCoords = data.pieceCoords
         let pieceColor = ColorPalette.from(data.pieceColor)
         let nextCoords = data.nextCoords
@@ -27,8 +29,6 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         let displayState = data.displayState
         let topScores = data.topScores
         let playerName = data.playerName
-        let width = 10
-        let height = 20
         let boardWidth = width * 2 + 2
         let boardHeight = height + 2
         let padLeft = max(0, (size.cols - boardWidth) / 2)

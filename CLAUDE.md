@@ -24,7 +24,7 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 |------|------|
 | `Sources/tetris/Main.swift` | Entry point, ArgumentParser CLI, wires logger + UI |
 | `Sources/TetrisCore/GameController.swift` | Actor: game loop, input handling, state machine (`transition(to:)`, `validTransitions`), scoring, `log` method |
-| `Sources/TetrisCore/GameState.swift` | Internal state machine enum (5 internal states) — not exposed to consumers |
+| `Sources/TetrisCore/GameState.swift` | Internal state machine enum (5 internal states) with associated values on `.initializing(width:height:)` — not exposed to consumers. Uses `RawState` for transition table lookups. |
 | `Sources/TetrisCore/GameDisplayState.swift` | Consumer-facing state enum (playing/paused/gameOver) — included in `GameEvent` |
 | `Sources/TetrisCore/LogLevel.swift` | Log level enum — `allows` gates messages, used by `log(level, .)` |
 | `Sources/ConsoleUI/ColorPalette.swift` | ANSI color palette, maps `TetrominoColor` → `ColorPalette` |
@@ -33,7 +33,6 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 | `Sources/ConsoleUI/ConsoleGameUI.swift` | Facade: adapter pattern, lifecycle management |
 | `Sources/ConsoleUI/TerminalAdapter.swift` | Terminal operations abstraction |
 | `Sources/TetrisCore/Tetromino.swift` | Shape definitions, rotation (`rotated(by:)`), block coordinates — immutable struct |
-| `Sources/TetrisCore/BlockState.swift` | `empty` / `filled(TetrominoColor)` enum — **internal/deprecated**. Grid uses sparse `[PieceCoordinate: TetrominoColor]`. |
 
 ## Conventions & Constraints
 

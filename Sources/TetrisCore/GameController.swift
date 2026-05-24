@@ -9,11 +9,12 @@ public actor GameController: InputReceiver {
 
     private static let baseScores: [Int: Int] = [1: 40, 2: 100, 3: 300, 4: 1200]
 
-    private let width = 10
-    private let height = 20
+    private var width = 10
+    private var height = 20
+    private var gridSize: (width: Int, height: Int) = (10, 20)
 
     /// All valid state transitions. Any transition not in this table is silently rejected.
-    private static let validTransitions: [GameState: Set<GameState>] = [
+    private static let validTransitions: [GameState.RawState: Set<GameState.RawState>] = [
         .initializing: [.dropping],
         .dropping: [.paused, .gameOver, .dropping],
         .paused: [.dropping, .gameOver],
@@ -22,7 +23,7 @@ public actor GameController: InputReceiver {
 
     // MARK: - State
 
-    private var state: GameState = .initializing {
+    private var state: GameState = .initializing(width: 10, height: 20) {
         didSet {
             log(.debug,"[State] \(oldValue) -> \(state)")
             switch state {
@@ -32,11 +33,13 @@ public actor GameController: InputReceiver {
                 stopDropTimer()
             case .gameOver:
                 stopDropTimer()
-                if oldValue != .gameOver {
+                if oldValue.rawState != .gameOver {
                     log(.debug,"[Score] Saving score=\(score) level=\(level) player=\(settings.playerName)")
                     scoreStorage.add(score: score, playerName: settings.playerName)
                 }
-            default: break
+            case .initializing(let w, let h):
+                self.width = w
+                self.height = h
             }
         }
     }
@@ -44,7 +47,7 @@ public actor GameController: InputReceiver {
     /// Transition to `newState` only if the transition is valid.
     /// Invalid transitions are silently rejected with a debug log.
     private func transition(to newState: GameState) {
-        guard let allowed = Self.validTransitions[state], allowed.contains(newState) else {
+        guard let allowed = Self.validTransitions[state.rawState], allowed.contains(newState.rawState) else {
             log(.debug,"[State] Invalid transition: \(state) -> \(newState), blocked")
             return
         }
@@ -88,6 +91,7 @@ public actor GameController: InputReceiver {
     private var sentLinesCleared: Int?
     private var sentDisplayState: GameDisplayState?
     private var sentTopScores: [StoredScore]?
+    private var sentGridSize: (width: Int, height: Int)?
     private var sentPlayerName: String?
     private var pendingHardDropDuration: TimeInterval?
     private var pendingClearedRows: (rows: Set<Int>, duration: TimeInterval)?
@@ -97,12 +101,14 @@ public actor GameController: InputReceiver {
         logger: Logger = Logger(),
         logLevel: LogLevel? = nil,
         scoreStorage: ScoreStorage = ScoreStorage(),
-        settings: any GameSettings = PersistentGameSettings()
+        settings: any GameSettings = PersistentGameSettings(),
+        gridSize: (width: Int, height: Int) = (10, 20)
     ) {
         self.minLogLevel = logLevel
         self.log = logger
         self.scoreStorage = scoreStorage
         self.settings = settings
+        self.gridSize = gridSize
         self.grid = [:]
 
         var tkc: AsyncStream<Set<GameEvent>>.Continuation!
@@ -150,7 +156,7 @@ public actor GameController: InputReceiver {
         dropTimer = Task {
             try? await Task.sleep(nanoseconds: UInt64(dropInterval * 1_000_000_000))
             guard dropTimerGeneration == gen else { return }
-            guard state == .dropping else { return }
+            guard state.rawState == .dropping else { return }
             if canMoveDown() {
                 currentY += 1
                 pieceBlockedOnLastTick = false
@@ -212,7 +218,7 @@ public actor GameController: InputReceiver {
     private func restart() {
         log(.debug,"[LifeCycle] Game restarted")
         resetGame()
-        transition(to: .initializing)
+        transition(to: .initializing(width: width, height: height))
         transition(to: .dropping)
         render()
     }
@@ -224,7 +230,7 @@ public actor GameController: InputReceiver {
     }
 
     private var isPlaying: Bool {
-        state == .dropping
+        state.rawState == .dropping
     }
 
     private func startInputListener() {
@@ -260,7 +266,7 @@ public actor GameController: InputReceiver {
                     transition(to: .paused)
                 case .resume:
                     log(.debug,"[Input] resume")
-                    guard state == .paused else { continue }
+                    guard state.rawState == .paused else { continue }
                     transition(to: .dropping)
                 case .stop:
                     log(.debug,"[Input] stop")
@@ -314,7 +320,7 @@ public actor GameController: InputReceiver {
             dropTimer = Task {
                 try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
                 guard dropTimerGeneration == gen else { return }
-                guard state == .dropping else { return }
+                guard state.rawState == .dropping else { return }
                 isHardDropAnimating = false
                 if settings.lockImmediatelyAfterHardDrop {
                     lockPiecePrivate()
@@ -463,6 +469,11 @@ public actor GameController: InputReceiver {
         }
         if displayState != sentDisplayState { events.insert(.state(displayState)); sentDisplayState = displayState }
         if topScores != sentTopScores { events.insert(.topScores(topScores)); sentTopScores = topScores }
+        let gs = (width: self.width, height: self.height)
+        if sentGridSize == nil || sentGridSize?.width != gs.width || sentGridSize?.height != gs.height {
+            events.insert(.gridSize(width: gs.width, height: gs.height))
+            sentGridSize = gs
+        }
         if settings.playerName != sentPlayerName { events.insert(.playerName(settings.playerName)); sentPlayerName = settings.playerName }
         guard !events.isEmpty else { return }
         tickContinuation.yield(events)
