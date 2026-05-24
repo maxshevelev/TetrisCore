@@ -5,7 +5,7 @@ import Foundation
 /// A single changed value on the tick stream.
 /// Multiple events are yielded as a `Set` each tick — only changed fields appear.
 public enum GameEvent: Hashable, Sendable {
-    case grid([[BlockState]])
+    case grid([PieceCoordinate: TetrominoColor])
     case pieceBlocks(Set<PieceCoordinate>, color: TetrominoColor, hardDropDuration: TimeInterval?)
     case nextPieceBlocks(Set<PieceCoordinate>, color: TetrominoColor)
     case score(Int)

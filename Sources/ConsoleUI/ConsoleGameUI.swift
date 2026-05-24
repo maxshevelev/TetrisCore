@@ -106,7 +106,7 @@ extension GameEvent {
 
 /// Non-optional accumulated state built from tick events.
 private struct AccumulatedState {
-    var grid: [[BlockState]] = []
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
     var pieceCoords: Set<PieceCoordinate> = []
     var pieceColor: TetrominoColor = .red
     var nextCoords: Set<PieceCoordinate> = []
@@ -159,7 +159,7 @@ private struct AccumulatedState {
 
 /// Complete state snapshot for rendering — all fields non-optional.
 public struct RenderSnapshot {
-    let grid: [[BlockState]]
+    let grid: [PieceCoordinate: TetrominoColor]
     let pieceCoords: Set<PieceCoordinate>
     let pieceColor: TetrominoColor
     let nextCoords: Set<PieceCoordinate>
