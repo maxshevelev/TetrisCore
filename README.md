@@ -35,6 +35,7 @@ The project is split into three targets with strict layer separation:
 - **Validated state machine**: All `GameState` transitions go through a `transition(to:)` method backed by a `validTransitions` table. Invalid transitions are silently rejected — the state graph is defined in one place, not scattered across call sites.
 - **Timer lifecycle in didSet**: Drop and lock timers are started/stopped exclusively in `state.didSet`, ensuring consistent lifecycle management regardless of which code path triggers the transition.
 - **Color abstraction**: `TetrominoColor` (in TetrisCore) is a UI-agnostic color enum. Each renderer maps it to its own color system — `ColorPalette` does this for ANSI consoles, a native app would map it to `UIColor`/`NSColor`.
+- **Sparse grid**: The game grid uses `[PieceCoordinate: TetrominoColor]` — a dictionary keyed by coordinate, storing only filled cells. An empty board starts with zero entries. Early game frames touch fewer than 40 cells; the full board touches ~200. This eliminates the per-tick copy of 200 blank cells and makes line-clear scan proportional to filled cells rather than grid height. `BlockState` is retained only for backward compatibility.
 
 ## Console UI (Reference Implementation)
 
@@ -136,7 +137,7 @@ Each tick yields a `Set<GameEvent>` containing only the values that changed sinc
 
 | Event | Type | Emits when |
 |-------|------|------------|
-| `.grid` | `[[BlockState]]` | Piece locks, lines are cleared |
+| `.grid` | `[PieceCoordinate: TetrominoColor]` | Piece locks, lines are cleared. Sparse representation — only filled cells. Consumers render by iterating the fixed 10×20 grid and looking up each coordinate. |
 | `.pieceBlocks` | `(Set<PieceCoordinate>, color: TetrominoColor, hardDropDuration: TimeInterval?)` | Every tick, move, rotate (current piece position). All blocks share the piece's color, carried separately from the coordinate set. The optional `hardDropDuration` is non-nil when the piece position is the result of a hard drop. |
 | `.nextPieceBlocks` | `(Set<PieceCoordinate>, color: TetrominoColor)` | Piece locks (new next piece generated) |
 | `.score` | `Int` | Lines are cleared |
@@ -285,6 +286,9 @@ public enum GameDisplayState: Sendable {
 ---
 
 ### `BlockState`
+
+> **Deprecated**: The game grid uses a sparse `[PieceCoordinate: TetrominoColor]` representation.
+> This enum is retained only for backward compatibility and will be removed in a future release.
 
 ```swift
 public enum BlockState: Equatable {
