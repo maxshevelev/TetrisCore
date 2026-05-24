@@ -35,7 +35,7 @@ The project is split into three targets with strict layer separation:
 - **Validated state machine**: All `GameState` transitions go through a `transition(to:)` method backed by a `validTransitions` table. Invalid transitions are silently rejected — the state graph is defined in one place, not scattered across call sites.
 - **Timer lifecycle in didSet**: Drop and lock timers are started/stopped exclusively in `state.didSet`, ensuring consistent lifecycle management regardless of which code path triggers the transition.
 - **Color abstraction**: `TetrominoColor` (in TetrisCore) is a UI-agnostic color enum. Each renderer maps it to its own color system — `ColorPalette` does this for ANSI consoles, a native app would map it to `UIColor`/`NSColor`.
-- **Sparse grid**: The game grid uses `[PieceCoordinate: TetrominoColor]` — a dictionary keyed by coordinate, storing only filled cells. An empty board starts with zero entries. Early game frames touch fewer than 40 cells; the full board touches ~200. This eliminates the per-tick copy of 200 blank cells and makes line-clear scan proportional to filled cells rather than grid height. Grid dimensions are configured at init and communicated to consumers via a `.gridSize` event.
+- **Sparse grid**: The game grid uses `[PieceCoordinate: TetrominoColor]` — a dictionary keyed by coordinate, storing only filled cells. An empty board starts with zero entries. Early game frames touch fewer than 40 cells; the full board touches ~200. This eliminates the per-tick copy of 200 blank cells and makes line-clear scan proportional to filled cells rather than grid height.
 
 ## Console UI (Reference Implementation)
 
@@ -114,8 +114,7 @@ public init(
     logger: Logger = Logger(),
     logLevel: LogLevel? = nil,
     scoreStorage: ScoreStorage = ScoreStorage(),
-    settings: any GameSettings = PersistentGameSettings(),
-    gridSize: (width: Int, height: Int) = (10, 20)
+    settings: any GameSettings = PersistentGameSettings()
 )
 ```
 
@@ -125,7 +124,6 @@ public init(
 | `logLevel` | Optional minimum log level for filtering |
 | `scoreStorage` | Backend for persisting top scores to JSON |
 | `settings` | Runtime settings via `GameSettings` protocol (see below). Defaults to `PersistentGameSettings` which reads/writes `settings.json`. |
-| `gridSize` | Grid dimensions passed to `.initializing` state. Sent as `.gridSize` event at game start. May become configurable in the future. |
 
 #### Update Stream
 
@@ -139,8 +137,7 @@ Each tick yields a `Set<GameEvent>` containing only the values that changed sinc
 
 | Event | Type | Emits when |
 |-------|------|------------|
-| `.grid` | `[PieceCoordinate: TetrominoColor]` | Piece locks, lines are cleared. Sparse representation — only filled cells. Consumers render by iterating `gridSize` and looking up each coordinate. |
-| `.gridSize` | `(width: Int, height: Int)` | Grid dimensions. Sent once at game start before any grid event. May become configurable in the future. |
+| `.grid` | `[PieceCoordinate: TetrominoColor]` | Piece locks, lines are cleared. Sparse representation — only filled cells. Consumers render by iterating the fixed 10×20 grid and looking up each coordinate. |
 | `.pieceBlocks` | `(Set<PieceCoordinate>, color: TetrominoColor, hardDropDuration: TimeInterval?)` | Every tick, move, rotate (current piece position). All blocks share the piece's color, carried separately from the coordinate set. The optional `hardDropDuration` is non-nil when the piece position is the result of a hard drop. |
 | `.nextPieceBlocks` | `(Set<PieceCoordinate>, color: TetrominoColor)` | Piece locks (new next piece generated) |
 | `.score` | `Int` | Lines are cleared |
@@ -271,26 +268,6 @@ public struct PieceCoordinate: Hashable, Sendable {
 ```
 
 Note: Coordinates are grid-absolute for `pieceBlocks` and preview-local (0–3) for `nextPieceBlocks`.
-
----
-
-### `GameState`
-
-Internal state machine enum. Transition graph enforced via `transition(to:)` — consumers use `GameDisplayState` instead.
-
-```swift
-enum GameState: Sendable {
-    case initializing(width: Int, height: Int)
-    case dropping
-    case paused
-    case gameOver
-
-    /// Raw state without associated values — used for transition table lookups.
-    enum RawState: Hashable {
-        case initializing, dropping, paused, gameOver
-    }
-}
-```
 
 ---
 

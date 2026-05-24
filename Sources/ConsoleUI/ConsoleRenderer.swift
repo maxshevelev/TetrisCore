@@ -17,8 +17,8 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
     public func render(data: RenderSnapshot) -> String {
         let size = terminal.getTerminalSize()
         let grid = data.grid
-        let width = data.gridSize.width
-        let height = data.gridSize.height
+        let width = 10
+        let height = 20
         let pieceCoords = data.pieceCoords
         let pieceColor = ColorPalette.from(data.pieceColor)
         let nextCoords = data.nextCoords

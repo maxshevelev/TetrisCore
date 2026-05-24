@@ -99,7 +99,6 @@ extension GameEvent {
         case .linesCleared(let v, let rows, let d): "lines(\(v))" + (rows.isEmpty ? "" : " rows:\(rows.sorted()) ↓\(String(format: "%.2f", d))s")
         case .state(let v):     "state(\(v))"
         case .topScores(let v): "scores(\(v.count))"
-        case .gridSize(let w, let h): "gridSize(\(w)×\(h))"
         case .playerName(let v): "player(\(v))"
         }
     }
@@ -117,7 +116,6 @@ private struct AccumulatedState {
     var linesCleared = 0
     var displayState: GameDisplayState = .playing
     var topScores: [StoredScore] = []
-    var gridSize: (width: Int, height: Int) = (10, 20)
     var playerName = ""
     var hardDropDuration: TimeInterval?
     var clearedRows: Set<Int> = []
@@ -134,7 +132,6 @@ private struct AccumulatedState {
             case .linesCleared(let v, let rows, let d): linesCleared = v; clearedRows = rows; clearedRowsAnimationDuration = d
             case .state(let v):       displayState = v
             case .topScores(let v):   topScores = v
-            case .gridSize(let w, let h): gridSize = (w, h)
             case .playerName(let v):  playerName = v
             }
         }
@@ -143,7 +140,6 @@ private struct AccumulatedState {
     func snapshot() -> RenderSnapshot {
         RenderSnapshot(
             grid: grid,
-            gridSize: gridSize,
             pieceCoords: pieceCoords,
             pieceColor: pieceColor,
             nextCoords: nextCoords,
@@ -164,7 +160,6 @@ private struct AccumulatedState {
 /// Complete state snapshot for rendering — all fields non-optional.
 public struct RenderSnapshot {
     let grid: [PieceCoordinate: TetrominoColor]
-    let gridSize: (width: Int, height: Int)
     let pieceCoords: Set<PieceCoordinate>
     let pieceColor: TetrominoColor
     let nextCoords: Set<PieceCoordinate>
