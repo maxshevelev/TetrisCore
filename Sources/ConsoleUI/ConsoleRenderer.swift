@@ -17,6 +17,8 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
     public func render(data: RenderSnapshot) -> String {
         let size = terminal.getTerminalSize()
         let grid = data.grid
+        let width = data.gridWidth
+        let height = data.gridHeight
         let pieceCoords = data.pieceCoords
         let pieceColor = ColorPalette.from(data.pieceColor)
         let nextCoords = data.nextCoords
@@ -27,8 +29,6 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         let displayState = data.displayState
         let topScores = data.topScores
         let playerName = data.playerName
-        let width = grid.first?.count ?? 10
-        let height = grid.count
         let boardWidth = width * 2 + 2
         let boardHeight = height + 2
         let padLeft = max(0, (size.cols - boardWidth) / 2)
@@ -54,11 +54,11 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
             output += terminal.cursorPosition(row: startRow + y + 1, col: startCol)
             output += terminal.bold + "║" + terminal.reset
             for x in 0..<width {
-                let currentCell = grid[y][x]
+                let filledColor = grid[PieceCoordinate(x: x, y: y)]
                 let paletteColor: ColorPalette?
 
-                if currentCell.isFilled {
-                    paletteColor = currentCell.color.map(ColorPalette.from)
+                if let color = filledColor {
+                    paletteColor = ColorPalette.from(color)
                 } else if piecePositions.contains(PieceCoordinate(x: x, y: y)) {
                     paletteColor = pieceColor
                 } else {

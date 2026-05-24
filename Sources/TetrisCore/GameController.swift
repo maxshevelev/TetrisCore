@@ -51,7 +51,7 @@ public actor GameController: InputReceiver {
         state = newState
     }
 
-    private var grid: [[BlockState]]
+    private var grid: [PieceCoordinate: TetrominoColor]
     private var currentPiece: Tetromino?
     private var nextPiece: Tetromino?
     private var currentX = 0
@@ -80,7 +80,7 @@ public actor GameController: InputReceiver {
 
     /// Cached values for computing diffs on the tick channel.
     /// nil = never sent (first send includes all fields).
-    private var sentGrid: [[BlockState]]?
+    private var sentGrid: [PieceCoordinate: TetrominoColor]?
     private var sentPieceCoords: Set<PieceCoordinate>?
     private var sentNextPieceCoords: Set<PieceCoordinate>?
     private var sentScore: Int?
@@ -89,6 +89,7 @@ public actor GameController: InputReceiver {
     private var sentDisplayState: GameDisplayState?
     private var sentTopScores: [StoredScore]?
     private var sentPlayerName: String?
+    private var sentGridSize = false
     private var pendingHardDropDuration: TimeInterval?
     private var pendingClearedRows: (rows: Set<Int>, duration: TimeInterval)?
     private var isHardDropAnimating = false
@@ -103,7 +104,7 @@ public actor GameController: InputReceiver {
         self.log = logger
         self.scoreStorage = scoreStorage
         self.settings = settings
-        self.grid = Array(repeating: Array(repeating: .empty, count: width), count: height)
+        self.grid = [:]
 
         var tkc: AsyncStream<Set<GameEvent>>.Continuation!
         let tks = AsyncStream<Set<GameEvent>> { tkc = $0 }
@@ -195,7 +196,7 @@ public actor GameController: InputReceiver {
     }
 
     private func resetGame() {
-        grid = Array(repeating: Array(repeating: .empty, count: width), count: height)
+        grid = [:]
         let shapes: [TetrominoShape] = [.I, .O, .T, .S, .Z, .J, .L]
         nextPiece = Tetromino(shape: shapes.randomElement()!)
         currentPiece = nextPiece
@@ -205,6 +206,7 @@ public actor GameController: InputReceiver {
         score = 0
         linesCleared = 0
         sentPlayerName = nil
+        sentGridSize = false
         pendingClearedRows = nil
         pieceBlockedOnLastTick = false
     }
@@ -350,7 +352,7 @@ public actor GameController: InputReceiver {
         guard let piece = currentPiece else { return false }
         for (x, y) in piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY) {
             if x < 0 || x >= width || y >= height { return true }
-            if y >= 0 && grid[y][x].isFilled { return true }
+            if y >= 0 && grid[PieceCoordinate(x: x, y: y)] != nil { return true }
         }
         return false
     }
@@ -360,14 +362,21 @@ public actor GameController: InputReceiver {
         log(.debug,"[Piece] Locked \([piece.shape.rawValue]) at (\(currentX),\(currentY))")
         for (x, y) in piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: currentY) {
             if y >= 0 && x >= 0 && x < width && y < height {
-                grid[y][x] = .filled(piece.shape.blockColor)
+                grid[PieceCoordinate(x: x, y: y)] = piece.shape.blockColor
             }
         }
         currentPiece = nil
     }
 
     private func clearLinesPrivate() {
-        let linesToClear = grid.indices.filter { grid[$0].allSatisfy { $0.isFilled } }
+        var rowCounts: [Int: Int] = [:]
+        for coord in grid.keys {
+            rowCounts[coord.y, default: 0] += 1
+        }
+        let linesToClear = rowCounts
+            .filter { $1 == width }
+            .map { $0.0 }
+            .sorted()
         let count = linesToClear.count
         if count == 0 { return }
         score += Self.baseScores[count, default: 0] * (level + 1)
@@ -381,11 +390,12 @@ public actor GameController: InputReceiver {
     }
 
     private func removeClearedRows(_ linesToClear: [Int]) {
-        let count = linesToClear.count
-        for y in linesToClear.reversed() {
-            grid.remove(at: y)
+        var newGrid: [PieceCoordinate: TetrominoColor] = [:]
+        for entry in grid where !linesToClear.contains(entry.key.y) {
+            let shift = linesToClear.filter { $0 > entry.key.y }.count
+            newGrid[PieceCoordinate(x: entry.key.x, y: entry.key.y + shift)] = entry.value
         }
-        grid.insert(contentsOf: Array(repeating: Array(repeating: .empty, count: width), count: count), at: 0)
+        grid = newGrid
     }
 
     private func spawnNextPiece() {
@@ -456,6 +466,7 @@ public actor GameController: InputReceiver {
         if displayState != sentDisplayState { events.insert(.state(displayState)); sentDisplayState = displayState }
         if topScores != sentTopScores { events.insert(.topScores(topScores)); sentTopScores = topScores }
         if settings.playerName != sentPlayerName { events.insert(.playerName(settings.playerName)); sentPlayerName = settings.playerName }
+        if !sentGridSize { events.insert(.gridSize(width: width, height: height)); sentGridSize = true }
         guard !events.isEmpty else { return }
         tickContinuation.yield(events)
     }

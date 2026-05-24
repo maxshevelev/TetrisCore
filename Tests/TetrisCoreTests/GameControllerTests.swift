@@ -5,7 +5,7 @@ import TetrisCore
 
 @Test("moveLeft moves piece left when not colliding")
 func moveLeft_movesLeft() async {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
     let piece = Tetromino(shape: .I)
     var currentX = 5
     let currentY = 5
@@ -22,7 +22,7 @@ func moveLeft_movesLeft() async {
 
 @Test("moveLeft does not move piece into wall")
 func moveLeft_doesNotMoveIntoWall() async {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
     let piece = Tetromino(shape: .I)
     var currentX = 0
     let currentY = 5
@@ -39,7 +39,7 @@ func moveLeft_doesNotMoveIntoWall() async {
 
 @Test("moveRight moves piece right when not colliding")
 func moveRight_movesRight() async {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
     let piece = Tetromino(shape: .I)
     var currentX = 5
     let currentY = 5
@@ -56,7 +56,7 @@ func moveRight_movesRight() async {
 
 @Test("moveRight does not move piece into wall")
 func moveRight_doesNotMoveIntoWall() async {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
     let piece = Tetromino(shape: .I)
     var currentX = 9
     let currentY = 5
@@ -86,7 +86,7 @@ func rotate_rotatesPiece() async {
 
 @Test("rotatePiece undo rotation when colliding")
 func rotate_doesNotRotateWhenColliding() async {
-    let grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    let grid: [PieceCoordinate: TetrominoColor] = [:]
     let piece = Tetromino(shape: .T)
     let currentX = 5
     let currentY = 18
@@ -103,7 +103,7 @@ func rotate_doesNotRotateWhenColliding() async {
 
 @Test("hardDrop drops piece to bottom")
 func hardDrop_dropsToBottom() async {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
     let piece = Tetromino(shape: .O)
     var currentX = 4
     var currentY = 0
@@ -119,7 +119,7 @@ func hardDrop_dropsToBottom() async {
 
 @Test("isColliding returns false when piece is in empty space")
 func isColliding_emptySpace() async {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
     let piece = Tetromino(shape: .T)
     let x = 3
     let y = 5
@@ -129,7 +129,7 @@ func isColliding_emptySpace() async {
 
 @Test("isColliding returns true when piece hits left wall")
 func isColliding_hitsLeftWall() async {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
     let piece = Tetromino(shape: .I)
     let x = -1
     let y = 5
@@ -139,7 +139,7 @@ func isColliding_hitsLeftWall() async {
 
 @Test("isColliding returns true when piece hits right wall")
 func isColliding_hitsRightWall() async {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
     let piece = Tetromino(shape: .I)
     let x = 10
     let y = 5
@@ -149,7 +149,7 @@ func isColliding_hitsRightWall() async {
 
 @Test("isColliding returns true when piece hits bottom")
 func isColliding_hitsBottom() async {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
     let piece = Tetromino(shape: .O)
     let x = 3
     let y = 20
@@ -159,7 +159,7 @@ func isColliding_hitsBottom() async {
 
 @Test("isColliding returns true when piece overlaps with filled block")
 func isColliding_overlapsFilledBlock() async {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
     let piece = Tetromino(shape: .T)
 
     // T piece at (0,0) has blocks at: (0,0), (1,0), (2,0), (1,1)
@@ -168,7 +168,7 @@ func isColliding_overlapsFilledBlock() async {
     let centerX = 4
     let centerY = 5
 
-    grid[centerY][centerX] = .filled(.red)
+    grid[PieceCoordinate(x: centerX, y: centerY)] = .red
 
     #expect(isColliding(grid: grid, piece: piece, x: 3, y: 5))
 }
@@ -220,35 +220,39 @@ func spawnNewPiece_gameOverOnCollide() async {
 
 // MARK: - Line Clearing Tests
 
-private func linesClearedIn(_ grid: [[BlockState]]) -> Int {
-    grid.filter { $0.allSatisfy { $0.isFilled } }.count
+private func linesClearedIn(_ grid: [PieceCoordinate: TetrominoColor]) -> Int {
+    (0..<20).filter { row in
+        grid.filter { $0.key.y == row }.count == 10
+    }.count
 }
 
 @Test("no lines cleared when no row is full")
 func clearLines_noLinesCleared() {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
-    grid[5] = Array(repeating: .filled(.red), count: 9)
-    grid[5][5] = .empty
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
+    for x in 0..<10 where x != 5 {
+        grid[PieceCoordinate(x: x, y: 5)] = .red
+    }
 
     #expect(linesClearedIn(grid) == 0)
 }
 
 @Test("single line is cleared when fully filled")
 func clearLines_singleLine() {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
-    grid[10] = Array(repeating: .filled(.red), count: 10)
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
+    for x in 0..<10 {
+        grid[PieceCoordinate(x: x, y: 10)] = .red
+    }
 
     #expect(linesClearedIn(grid) == 1)
-
-    let filledRows = grid.filter { $0.allSatisfy { $0.isFilled } }
-    #expect(filledRows.count == 1)
 }
 
 @Test("multiple lines are cleared when fully filled")
 func clearLines_multipleLines() {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
     for row in 8...10 {
-        grid[row] = Array(repeating: .filled(.cyan), count: 10)
+        for x in 0..<10 {
+            grid[PieceCoordinate(x: x, y: row)] = .cyan
+        }
     }
 
     #expect(linesClearedIn(grid) == 3)
@@ -256,9 +260,11 @@ func clearLines_multipleLines() {
 
 @Test("four lines are cleared simultaneously")
 func clearLines_fourLines() {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
     for row in 16...19 {
-        grid[row] = Array(repeating: .filled(.blue), count: 10)
+        for x in 0..<10 {
+            grid[PieceCoordinate(x: x, y: row)] = .blue
+        }
     }
 
     #expect(linesClearedIn(grid) == 4)
@@ -266,40 +272,42 @@ func clearLines_fourLines() {
 
 @Test("only fully filled rows are removed from grid")
 func clearLines_onlyFullRowsRemoved() {
-    var grid: [[BlockState]] = Array(repeating: Array(repeating: .empty, count: 10), count: 20)
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
     for row in 10...12 {
-        grid[row] = Array(repeating: .filled(.green), count: 10)
+        for x in 0..<10 {
+            grid[PieceCoordinate(x: x, y: row)] = .green
+        }
     }
 
-    let fullCount = grid.filter { $0.allSatisfy { $0.isFilled } }.count
+    let fullCount = linesClearedIn(grid)
     #expect(fullCount == 3)
 
     // Check that partial rows remain
-    grid[11][5] = .empty
-    let remainingFull = grid.filter { $0.allSatisfy { $0.isFilled } }.count
+    grid[PieceCoordinate(x: 5, y: 11)] = nil
+    let remainingFull = linesClearedIn(grid)
     #expect(remainingFull == 2)
 }
 
 // MARK: - Helper Functions
 
-private func isColliding(grid: [[BlockState]], piece: Tetromino, x: Int, y: Int) -> Bool {
+private func isColliding(grid: [PieceCoordinate: TetrominoColor], piece: Tetromino, x: Int, y: Int) -> Bool {
     let width = 10
     let height = 20
 
     for (px, py) in piece.getAbsoluteCoordinates(xOffset: x, yOffset: y) {
         if px < 0 || px >= width || py >= height { return true }
-        if py >= 0 && grid[py][px].isFilled { return true }
+        if py >= 0 && grid[PieceCoordinate(x: px, y: py)] != nil { return true }
     }
     return false
 }
 
-private func canMoveDown(grid: [[BlockState]], piece: Tetromino, y: Int) -> Bool {
+private func canMoveDown(grid: [PieceCoordinate: TetrominoColor], piece: Tetromino, y: Int) -> Bool {
     let width = 10
     let height = 20
 
     for (px, py) in piece.getAbsoluteCoordinates(xOffset: 0, yOffset: y) {
         if px < 0 || px >= width || py >= height { return false }
-        if py >= 0 && grid[py][px].isFilled { return false }
+        if py >= 0 && grid[PieceCoordinate(x: px, y: py)] != nil { return false }
     }
     return true
 }
