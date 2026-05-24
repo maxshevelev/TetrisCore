@@ -89,6 +89,7 @@ public actor GameController: InputReceiver {
     private var sentDisplayState: GameDisplayState?
     private var sentTopScores: [StoredScore]?
     private var sentPlayerName: String?
+    private var sentGridSize = false
     private var pendingHardDropDuration: TimeInterval?
     private var pendingClearedRows: (rows: Set<Int>, duration: TimeInterval)?
     private var isHardDropAnimating = false
@@ -205,6 +206,7 @@ public actor GameController: InputReceiver {
         score = 0
         linesCleared = 0
         sentPlayerName = nil
+        sentGridSize = false
         pendingClearedRows = nil
         pieceBlockedOnLastTick = false
     }
@@ -464,6 +466,7 @@ public actor GameController: InputReceiver {
         if displayState != sentDisplayState { events.insert(.state(displayState)); sentDisplayState = displayState }
         if topScores != sentTopScores { events.insert(.topScores(topScores)); sentTopScores = topScores }
         if settings.playerName != sentPlayerName { events.insert(.playerName(settings.playerName)); sentPlayerName = settings.playerName }
+        if !sentGridSize { events.insert(.gridSize(width: width, height: height)); sentGridSize = true }
         guard !events.isEmpty else { return }
         tickContinuation.yield(events)
     }

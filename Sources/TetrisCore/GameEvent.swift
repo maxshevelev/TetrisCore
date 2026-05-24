@@ -14,4 +14,5 @@ public enum GameEvent: Hashable, Sendable {
     case state(GameDisplayState)
     case topScores([StoredScore])
     case playerName(String)
+    case gridSize(width: Int, height: Int)
 }
