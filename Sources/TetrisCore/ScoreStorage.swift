@@ -14,7 +14,7 @@ public struct StoredScore: Hashable, Codable, Equatable, Sendable {
 
 public final class ScoreStorage: Sendable {
     private let filePath: URL
-    private let lock = NSLock()
+    private let queue = DispatchQueue(label: "tetris.scorestorage", qos: .userInitiated)
 
     /// Creates a storage pointing to the given file URL.
     /// Defaults to `~/.tetris/scores.json` on macOS, `~/Library/Application Support/Tetris/scores.json` on iOS.
@@ -29,29 +29,30 @@ public final class ScoreStorage: Sendable {
     /// Saves a new score then keeps only the top 10.
     @discardableResult
     public func add(score: Int, playerName: String) -> [StoredScore] {
-        lock.lock()
-        defer { lock.unlock() }
-        let newEntry = StoredScore(playerName: playerName, score: score)
-        guard !loadScoresPrivate().contains(where: { $0.score == score && $0.playerName == playerName }) else {
-            return loadScoresPrivate()
+        var result: [StoredScore]!
+        queue.sync {
+            let newEntry = StoredScore(playerName: playerName, score: score)
+            guard !loadScores().contains(where: { $0.score == score && $0.playerName == playerName }) else {
+                result = loadScores()
+                return
+            }
+            var scores = loadScores()
+            scores.append(newEntry)
+            scores.sort { $0.score > $1.score }
+            scores = Array(scores.prefix(10))
+            saveScores(scores)
+            result = scores
         }
-        var scores = loadScoresPrivate()
-        scores.append(newEntry)
-        scores.sort { $0.score > $1.score }
-        scores = Array(scores.prefix(10))
-        saveScoresPrivate(scores)
-        return scores
+        return result
     }
 
     public func topScores() -> [StoredScore] {
-        lock.lock()
-        defer { lock.unlock() }
-        return loadScoresPrivate()
+        queue.sync { loadScores() }
     }
 
-    // MARK: - Private (unlocked callers)
+    // MARK: - Private (queue-executed callers only)
 
-    private func loadScoresPrivate() -> [StoredScore] {
+    private func loadScores() -> [StoredScore] {
         guard
             let data = try? Data(contentsOf: filePath),
             let scores = try? JSONDecoder().decode([StoredScore].self, from: data)
@@ -61,7 +62,7 @@ public final class ScoreStorage: Sendable {
         return scores
     }
 
-    private func saveScoresPrivate(_ scores: [StoredScore]) {
+    private func saveScores(_ scores: [StoredScore]) {
         do {
             try FileManager.default.createDirectory(
                 at: filePath.deletingLastPathComponent(),
