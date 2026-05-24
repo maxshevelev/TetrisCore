@@ -10,7 +10,7 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 - **External dependency**: `swift-argument-parser` ≥1.4.0 for CLI argument parsing
 - **Actor-based** `GameController` for concurrent, data-race-free game state
 - **Event-driven** input via `InputReceiver` protocol + `InputBuffer`
-- **Virtual grid rendering** with ANSI escape sequences, centered on terminal
+- **Sparse grid** — `[PieceCoordinate: TetrominoColor]` storing only filled cells. Rendering iterates the fixed 10×20 grid and looks up each coordinate. Line-clear scans only filled cells instead of all 200 rows. `BlockState` is internal-only and deprecated for external consumers.
 - **Persistent score storage** in `~/.tetris/scores.json` (top 10, JSON-backed) — no date field
 - **Optional debug logging** via `-d` flag with log level (debug, info, notice, error, fault), uses Apple `os.Logger` — all logs use `privacy: .public`
 - **Optional player name** via `-u, --user` flag, persisted in `~/.tetris/settings.json`, defaults to Unix username
@@ -33,7 +33,6 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 | `Sources/ConsoleUI/ConsoleGameUI.swift` | Facade: adapter pattern, lifecycle management |
 | `Sources/ConsoleUI/TerminalAdapter.swift` | Terminal operations abstraction |
 | `Sources/TetrisCore/Tetromino.swift` | Shape definitions, rotation (`rotated(by:)`), block coordinates — immutable struct |
-| `Sources/TetrisCore/BlockState.swift` | `empty` / `filled(TetrominoColor)` enum |
 
 ## Conventions & Constraints
 

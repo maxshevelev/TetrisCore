@@ -100,13 +100,14 @@ extension GameEvent {
         case .state(let v):     "state(\(v))"
         case .topScores(let v): "scores(\(v.count))"
         case .playerName(let v): "player(\(v))"
+        case .gridSize(let w, let h): "gridSize(\(w)x\(h))"
         }
     }
 }
 
 /// Non-optional accumulated state built from tick events.
 private struct AccumulatedState {
-    var grid: [[BlockState]] = []
+    var grid: [PieceCoordinate: TetrominoColor] = [:]
     var pieceCoords: Set<PieceCoordinate> = []
     var pieceColor: TetrominoColor = .red
     var nextCoords: Set<PieceCoordinate> = []
@@ -117,6 +118,8 @@ private struct AccumulatedState {
     var displayState: GameDisplayState = .playing
     var topScores: [StoredScore] = []
     var playerName = ""
+    var gridWidth = 10
+    var gridHeight = 20
     var hardDropDuration: TimeInterval?
     var clearedRows: Set<Int> = []
     var clearedRowsAnimationDuration: TimeInterval = 0
@@ -133,6 +136,7 @@ private struct AccumulatedState {
             case .state(let v):       displayState = v
             case .topScores(let v):   topScores = v
             case .playerName(let v):  playerName = v
+            case .gridSize(let w, let h): gridWidth = w; gridHeight = h
             }
         }
     }
@@ -150,6 +154,8 @@ private struct AccumulatedState {
             displayState: displayState,
             topScores: topScores,
             playerName: playerName,
+            gridWidth: gridWidth,
+            gridHeight: gridHeight,
             hardDropDuration: hardDropDuration,
             clearedRows: clearedRows,
             clearedRowsAnimationDuration: clearedRowsAnimationDuration
@@ -159,7 +165,7 @@ private struct AccumulatedState {
 
 /// Complete state snapshot for rendering — all fields non-optional.
 public struct RenderSnapshot {
-    let grid: [[BlockState]]
+    let grid: [PieceCoordinate: TetrominoColor]
     let pieceCoords: Set<PieceCoordinate>
     let pieceColor: TetrominoColor
     let nextCoords: Set<PieceCoordinate>
@@ -170,6 +176,8 @@ public struct RenderSnapshot {
     let displayState: GameDisplayState
     let topScores: [StoredScore]
     let playerName: String
+    let gridWidth: Int
+    let gridHeight: Int
     let hardDropDuration: TimeInterval?
     let clearedRows: Set<Int>
     let clearedRowsAnimationDuration: TimeInterval
