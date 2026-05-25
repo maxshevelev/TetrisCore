@@ -101,6 +101,7 @@ extension GameEvent {
         case .topScores(let v): "scores(\(v.count))"
         case .playerName(let v): "player(\(v))"
         case .gridSize(let w, let h): "gridSize(\(w)x\(h))"
+        case .ghostPieceBlocks: "ghost"
         }
     }
 }
@@ -120,6 +121,7 @@ private struct AccumulatedState {
     var playerName = ""
     var gridWidth = 10
     var gridHeight = 20
+    var ghostPieceCoords: Set<PieceCoordinate> = []
     var hardDropDuration: TimeInterval?
     var clearedRows: Set<Int> = []
     var clearedRowsAnimationDuration: TimeInterval = 0
@@ -137,6 +139,7 @@ private struct AccumulatedState {
             case .topScores(let v):   topScores = v
             case .playerName(let v):  playerName = v
             case .gridSize(let w, let h): gridWidth = w; gridHeight = h
+            case .ghostPieceBlocks(let v): ghostPieceCoords = v
             }
         }
     }
@@ -156,6 +159,7 @@ private struct AccumulatedState {
             playerName: playerName,
             gridWidth: gridWidth,
             gridHeight: gridHeight,
+            ghostPieceCoords: ghostPieceCoords,
             hardDropDuration: hardDropDuration,
             clearedRows: clearedRows,
             clearedRowsAnimationDuration: clearedRowsAnimationDuration
@@ -178,6 +182,7 @@ public struct RenderSnapshot {
     let playerName: String
     let gridWidth: Int
     let gridHeight: Int
+    let ghostPieceCoords: Set<PieceCoordinate>
     let hardDropDuration: TimeInterval?
     let clearedRows: Set<Int>
     let clearedRowsAnimationDuration: TimeInterval

@@ -15,4 +15,5 @@ public enum GameEvent: Hashable, Sendable {
     case topScores([StoredScore])
     case playerName(String)
     case gridSize(width: Int, height: Int)
+    case ghostPieceBlocks(Set<PieceCoordinate>)
 }

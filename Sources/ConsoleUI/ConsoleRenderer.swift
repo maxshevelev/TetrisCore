@@ -29,6 +29,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         let displayState = data.displayState
         let topScores = data.topScores
         let playerName = data.playerName
+        let ghostCoords = data.ghostPieceCoords
         let boardWidth = width * 2 + 2
         let boardHeight = height + 2
         let padLeft = max(0, (size.cols - boardWidth) / 2)
@@ -61,12 +62,20 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
                     paletteColor = ColorPalette.from(color)
                 } else if piecePositions.contains(PieceCoordinate(x: x, y: y)) {
                     paletteColor = pieceColor
+                } else if ghostCoords.contains(PieceCoordinate(x: x, y: y)) {
+                    paletteColor = .ghost
                 } else {
                     paletteColor = nil
                 }
 
                 if let paletteColor {
-                    output += paletteColor.ansiCode + "██" + terminal.reset
+                    if let bgCode = paletteColor.bgColorCode {
+                        output += terminal.cursorPosition(row: startRow + y + 1, col: startCol + x * 2 + 1)
+                        output += paletteColor.ansiCode + bgCode + "· " + terminal.reset
+                    } else {
+                        output += terminal.cursorPosition(row: startRow + y + 1, col: startCol + x * 2 + 1)
+                        output += paletteColor.ansiCode + "██" + terminal.reset
+                    }
                 } else {
                     output += "· "
                 }

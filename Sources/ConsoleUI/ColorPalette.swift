@@ -11,6 +11,7 @@ public enum ColorPalette: Sendable {
     case red
     case blue
     case orange
+    case ghost
 
     /// ANSI escape code for this color
     public var ansiCode: String {
@@ -22,6 +23,15 @@ public enum ColorPalette: Sendable {
         case .red:     return "\u{001B}[31m"
         case .blue:    return "\u{001B}[34m"
         case .orange:  return "\u{001B}[38;5;208m"
+        case .ghost:   return "\u{001B}[38;5;245m"
+        }
+    }
+
+    /// Background color code (256-color palette).
+    public var bgColorCode: String? {
+        switch self {
+        case .ghost: return "\u{001B}[48;5;250m"
+        default: return nil
         }
     }
 

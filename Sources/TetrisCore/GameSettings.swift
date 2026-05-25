@@ -12,6 +12,7 @@ public protocol GameSettings: AnyObject, Sendable {
     var isHardDropAnimated: Bool { get set }
     var isLineClearAnimated: Bool { get set }
     var initialLevel: Int { get set }
+    var isGhostPieceEnabled: Bool { get set }
     func addListener(_ listener: SettingsUpdateListener)
     func removeListener(_ listener: SettingsUpdateListener)
 }
@@ -24,6 +25,7 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
     private var _hardDropAnimated: Bool
     private var _lineClearAnimated: Bool
     private var _initialLevel: Int
+    private var _ghostPieceEnabled: Bool
 
     private var listeners: [Weak] = []
 
@@ -87,6 +89,15 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
         }
     }
 
+    public var isGhostPieceEnabled: Bool {
+        get { lock.withLock { _ghostPieceEnabled } }
+        set {
+            lock.withLock { _ghostPieceEnabled = newValue }
+            persist()
+            notify()
+        }
+    }
+
     // MARK: - Notification
 
     private func notify() {
@@ -108,6 +119,7 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
         self._hardDropAnimated = stored.hardDropAnimated
         self._lineClearAnimated = stored.lineClearAnimated
         self._initialLevel = stored.initialLevel
+        self._ghostPieceEnabled = stored.ghostPieceEnabled
         if stored.usedDefaults {
             persist()
         }
@@ -122,6 +134,7 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
             "isHardDropAnimated": _hardDropAnimated,
             "isLineClearAnimated": _lineClearAnimated,
             "initialLevel": _initialLevel,
+            "isGhostPieceEnabled": _ghostPieceEnabled,
         ]
         do {
             try FileManager.default.createDirectory(
@@ -135,17 +148,39 @@ public final class PersistentGameSettings: GameSettings, @unchecked Sendable {
         }
     }
 
-    private static func loadSettings() -> (playerName: String, lockImmediately: Bool, hardDropAnimated: Bool, lineClearAnimated: Bool, initialLevel: Int, usedDefaults: Bool) {
+    private static func loadSettings() -> (playerName: String, lockImmediately: Bool, hardDropAnimated: Bool, lineClearAnimated: Bool, initialLevel: Int, ghostPieceEnabled: Bool, usedDefaults: Bool) {
+        let defaults = (name: NSUserName(), lockImmediately: false, hardDropAnimated: false, lineClearAnimated: false, initialLevel: 1, ghostPieceEnabled: true)
+
         guard let data = try? Data(contentsOf: appSettingsPath),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            return (NSUserName(), false, false, false, 1, true)
+            return (defaults.name, defaults.lockImmediately, defaults.hardDropAnimated, defaults.lineClearAnimated, defaults.initialLevel, defaults.ghostPieceEnabled, true)
         }
-        let name = (json["playerName"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? NSUserName()
-        let lockImmediately = json["lockImmediatelyAfterHardDrop"] as? Bool ?? false
-        let hardDropAnimated = json["isHardDropAnimated"] as? Bool ?? false
-        let lineClearAnimated = json["isLineClearAnimated"] as? Bool ?? false
-        let initialLevel = min(10, max(1, (json["initialLevel"] as? Int) ?? 1))
-        return (name, lockImmediately, hardDropAnimated, lineClearAnimated, initialLevel, false)
+
+        let name: String
+        if let raw = json["playerName"] as? String, !raw.isEmpty {
+            name = raw
+        } else {
+            name = defaults.name
+        }
+        let lockImmediately = json["lockImmediatelyAfterHardDrop"] as? Bool ?? defaults.lockImmediately
+        let hardDropAnimated = json["isHardDropAnimated"] as? Bool ?? defaults.hardDropAnimated
+        let lineClearAnimated = json["isLineClearAnimated"] as? Bool ?? defaults.lineClearAnimated
+        let initialLevel: Int
+        if let raw = json["initialLevel"] as? Int {
+            initialLevel = min(10, max(1, raw))
+        } else {
+            initialLevel = defaults.initialLevel
+        }
+        let ghostPieceEnabled = json["isGhostPieceEnabled"] as? Bool ?? defaults.ghostPieceEnabled
+
+        let usedDefaults = name != defaults.name
+            || lockImmediately != defaults.lockImmediately
+            || hardDropAnimated != defaults.hardDropAnimated
+            || lineClearAnimated != defaults.lineClearAnimated
+            || initialLevel != defaults.initialLevel
+            || ghostPieceEnabled != defaults.ghostPieceEnabled
+
+        return (name, lockImmediately, hardDropAnimated, lineClearAnimated, initialLevel, ghostPieceEnabled, usedDefaults)
     }
 
     private static var appSettingsPath: URL {

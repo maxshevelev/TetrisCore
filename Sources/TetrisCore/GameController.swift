@@ -90,6 +90,7 @@ public actor GameController: InputReceiver {
     private var sentTopScores: [StoredScore]?
     private var sentPlayerName: String?
     private var sentGridSize = false
+    private var sentGhostPieceCoords: Set<PieceCoordinate>?
     private var pendingHardDropDuration: TimeInterval?
     private var pendingClearedRows: (rows: Set<Int>, duration: TimeInterval)?
     private var isHardDropAnimating = false
@@ -357,6 +358,23 @@ public actor GameController: InputReceiver {
         return false
     }
 
+    /// Check if the piece can move down from a specific y position (without mutating `currentY`).
+    private func canMoveDown(from y: Int) -> Bool {
+        guard let piece = currentPiece else { return false }
+        for (x, py) in piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: y + 1) {
+            if x < 0 || x >= width || py >= height { return false }
+            if py >= 0 && grid[PieceCoordinate(x: x, y: py)] != nil { return false }
+        }
+        return true
+    }
+
+    private var ghostPieceCoords: Set<PieceCoordinate> {
+        guard let piece = currentPiece else { return [] }
+        var minY = currentY
+        while canMoveDown(from: minY) { minY += 1 }
+        return Set(piece.getAbsoluteCoordinates(xOffset: currentX, yOffset: minY).map { PieceCoordinate(x: $0.x, y: $0.y) })
+    }
+
     private func lockPiecePrivate() {
         guard let piece = currentPiece else { return }
         log(.debug,"[Piece] Locked \([piece.shape.rawValue]) at (\(currentX),\(currentY))")
@@ -467,6 +485,10 @@ public actor GameController: InputReceiver {
         if topScores != sentTopScores { events.insert(.topScores(topScores)); sentTopScores = topScores }
         if settings.playerName != sentPlayerName { events.insert(.playerName(settings.playerName)); sentPlayerName = settings.playerName }
         if !sentGridSize { events.insert(.gridSize(width: width, height: height)); sentGridSize = true }
+        if settings.isGhostPieceEnabled {
+            let gpCoords = ghostPieceCoords
+            if gpCoords != sentGhostPieceCoords { events.insert(.ghostPieceBlocks(gpCoords)); sentGhostPieceCoords = gpCoords }
+        } else { sentGhostPieceCoords = nil }
         guard !events.isEmpty else { return }
         tickContinuation.yield(events)
     }
