@@ -30,7 +30,7 @@ public enum ColorPalette: Sendable {
     /// Background color code (256-color palette).
     public var bgColorCode: String? {
         switch self {
-        case .ghost: return "\u{001B}[48;5;250m"
+        case .ghost: return "\u{001B}[48;5;254m"
         default: return nil
         }
     }
