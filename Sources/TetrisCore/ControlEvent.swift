@@ -9,4 +9,5 @@ public enum ControlEvent: Sendable {
     case pause
     case resume
     case stop
+    case start
 }

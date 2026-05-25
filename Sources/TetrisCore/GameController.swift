@@ -250,13 +250,12 @@ public actor GameController: InputReceiver {
                     rotatePiece()
                 case .hardDrop:
                     log(.debug,"[Input] hard_drop at y=\(currentY)")
-                    if isPlaying {
-                        hardDropPiece()
-                    } else if state == .gameOver {
-                        restart()
-                    } else {
-                        continue
-                    }
+                    guard isPlaying else { continue }
+                    hardDropPiece()
+                case .start:
+                    log(.debug,"[Input] start")
+                    guard state == .gameOver else { continue }
+                    restart()
                 case .pause:
                     log(.debug,"[Input] pause")
                     guard isPlaying else { continue }
