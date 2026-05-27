@@ -294,12 +294,25 @@ public actor GameController: InputReceiver {
     private func rotatePiece() {
         guard isPlaying, !isHardDropAnimating else { return }
         guard let piece = currentPiece else { return }
-        let rotated = piece.rotated(by: -1)
         let oldPiece = currentPiece
-        currentPiece = rotated
-        if isColliding() {
-            currentPiece = oldPiece
+        let oldX = currentX
+        let oldY = currentY
+        let rotated = piece.rotated(by: -1)
+        let offsets = wallKickOffsets(for: piece.shape, from: piece.rotationIndex, to: rotated.rotationIndex)
+
+        for (dx, dy) in offsets {
+            currentPiece = rotated
+            currentX = oldX + dx
+            currentY = oldY + dy
+            if !isColliding() {
+                return
+            }
         }
+
+        // No kick succeeded — revert
+        currentPiece = oldPiece
+        currentX = oldX
+        currentY = oldY
     }
 
     private func hardDropPiece() {
