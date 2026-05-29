@@ -63,7 +63,7 @@ public enum TetrominoShape: String, Sendable {
 
 public struct Tetromino: Sendable {
     public let shape: TetrominoShape
-    public var rotationIndex: Int
+    public let rotationIndex: Int
 
     public init(shape: TetrominoShape, rotationIndex: Int = 0) {
         self.shape = shape

@@ -1,216 +1,184 @@
 # TetrisCore — Full Project Review
 
-**Date**: 2026-05-24
+**Date**: 2026-05-28
 **Branch**: main
-**Build**: Passing (0 warnings)
-**Tests**: 19/19 passing
+**Files**: 20 sources, 1 test file, Package.swift
 
 ---
 
 ## 1. Architecture
 
-The three-layer split (TetrisCore / ConsoleUI / tetris) is clean and well-justified. The actor-based `GameController` with diff-style `AsyncStream<Set<GameEvent>>` is a sound event-driven architecture. The validated `validTransitions` table centralizes state machine logic.
+The three-layer split (TetrisCore / ConsoleUI / tetris) is clean and well-maintained. The actor-based `GameController` with diff-style `AsyncStream<Set<GameEvent>>` is a sound event-driven architecture — consumers accumulate state by switching over event sets, which minimizes per-tick data transfer.
 
-**Assessment**: Solid. The layer boundaries are strict and the public API surface is minimal.
+The validated `validTransitions` table centralizes state machine logic. Timer lifecycle in `state.didSet` ensures consistent start/stop behavior regardless of which code path triggers a transition. The internal `GameState` (5 cases) is correctly mapped to a public `GameDisplayState` (3 cases), hiding timer internals from consumers.
 
----
-
-## 2. Bugs
-
-### 2.1 PersistentGameSettings notify() deadlocks (CRITICAL)
-
-**File**: `GameSettings.swift:43-50`, `notify()` at line 92-99
-
-```swift
-// In playerName setter:
-set {
-    let trimmed = newValue.trimmingCharacters(in: .whitespaces)
-    guard !trimmed.isEmpty else { return }
-    lock.withLock { _playerName = trimmed }  // outer lock
-    persist()
-    notify()  // <- called OUTSIDE the lock — but also inside (line 93)!
-}
-
-private func notify() {
-    lock.withLock {                    // inner lock — same NSLock
-        listeners.removeAll { $0.value == nil }
-    }
-    for w in listeners {
-        w.value?.settingsDidUpdate(self)
-    }
-}
-```
-
-`notify()` acquires the same `NSLock` that is not reentrant. This will deadlock on any settings change that has listeners registered. Since `GameController` is the only consumer and the listener protocol has no default impl, this may never execute in practice — but the code is fundamentally broken.
-
-**Fix**: Remove the `lock.withLock` from `notify()` (callers hold the lock), or use a separate dispatch queue for notification, or remove the listener pattern entirely if no consumers exist.
-
-### 2.2 ScoreStorage race condition (HIGH)
-
-**File**: `ScoreStorage.swift:35-43`
-
-`loadScoresPrivate()` reads the file without holding the lock. Concurrent `add()` calls from different code paths could read stale files simultaneously, then both write — one score gets lost (classic lost-update).
-
-**Fix**: Use a serial dispatch queue for all `ScoreStorage` access instead of `NSLock` with scattered unlocks.
-
-### 2.3 Hard-drop movement not blocked outside animation (MEDIUM)
-
-**File**: `GameController.swift:276-293`
-
-```swift
-private func moveLeft() {
-    guard isPlaying, !isHardDropAnimating else { return }
-```
-
-`isHardDropAnimating` only blocks movement during the animation window. After the animation period, the drop timer's `pieceBlockedOnLastTick` path sets the flag to true and the drop tick will lock the piece — but `moveLeft`/`moveRight`/`rotatePiece` can still run during this gap because they check `isHardDropAnimating`, not `pieceBlockedOnLastTick`.
-
-**Impact**: If the user sends input during the drop-catch-up period (after hard-drop animation delay), the piece moves around while simultaneously being locked by the timer. This produces inconsistent grid state.
+**Assessment**: Solid. Layer boundaries are strict, public API surface is minimal, and the sparse grid (`[PieceCoordinate: TetrominoColor]`) is an efficient representation.
 
 ---
 
-## 3. Dead Code & Stale Artifacts
+## 2. Bugs & Correctness
 
-### 3.1 BlockState.swift is unused dead code
+### 2.1 `hardDropPiece` can run during active hard-drop animation (GameController:318-319)
 
-**File**: `Sources/TetrisCore/BlockState.swift`
+`hardDropPiece` only guards `isPlaying`. The movement methods (`moveLeft`, `moveRight`, `rotatePiece`) additionally guard `!isHardDropAnimating`. If two hard-drop events are queued rapidly, the second enters while `isHardDropAnimating == true`. The animation branch is skipped (because the guard falls through), and we hit the non-animated path with `pieceBlockedOnLastTick = true` — but the animation timer is still running with a stale `dropTimerGeneration`. The animation timer fires later, checks `dropTimerGeneration`, and returns early — so in practice the generation guard prevents corruption. However, the `pendingHardDropDuration` could be set by the second call and consumed in the same render, sending a spurious hard-drop hint for a non-animated position.
 
-The grid is stored as `[[BlockState]]` internally but only filled cells are populated. `BlockState.empty` cells are never written or read by game logic — only the sparse dictionary representation in `GameEvent.grid` uses `BlockState`. `BlockState` is never used by any game logic.
+**Severity**: Low-Medium. The generation guard limits real damage, but the behavior is undefined and input-dependent.
 
-**Recommendation**: Delete `BlockState.swift`. The `GameEvent.grid` case still carries the `[[BlockState]]` type but is never consumed by the console renderer (which uses the sparse `grid` dictionary directly from accumulated state).
+**Fix**: Add `!isHardDropAnimating` guard at the dispatch level (input listener switch, line 253) to reject hard-drop events while animating.
 
-### 3.2 Tests duplicate internal helper functions
+### 2.2 `Tetromino.rotationIndex` is `var` despite documented immutability (Tetromino:66)
 
-**File**: `Tests/TetrisCoreTests/GameControllerTests.swift`
+CLAUDE.md states "`Tetromino` is an immutable `Sendable` struct — use `rotated(by:)`, never mutate in place." Yet `rotationIndex` is `var`, allowing `piece.rotationIndex += 1` from any caller. The `blocks` computed property handles negative indices gracefully via modular arithmetic, so out-of-bounds rotation doesn't crash — but it undermines the design intent.
 
-Lines 285-305: `isColliding()`, `canMoveDown()` are re-implemented in the test file. These are internal to `GameController` and the copies can diverge from the actual implementation. The tests verify the test helpers, not the game engine.
+**Severity**: Medium. Encourages misuse patterns.
 
-### 3.3 TetrominoShape.blocks allocates on every access
+**Fix**: Change to `let rotationIndex: Int`.
 
-**File**: `Tetromino.swift:20-61`
+### 2.3 `ScoreStorage.add()` rejects legitimate duplicate scores (ScoreStorage:35)
 
-The `blocks` property is a computed property that returns a new 3D array each time. Since the shape definitions are immutable constants, this should be a `static let` with pre-computed rotation data.
+```swift
+guard !loadScores().contains(where: { $0.score == score && $0.playerName == playerName })
+```
 
-### 3.4 allShapes array allocated on every call
+If Alice scores exactly 1200 twice in separate games, the second is silently dropped. The intent is to prevent double-save from a single game-over, but the check is global and permanent.
 
-**File**: `GameController.swift:113, 199, 400`
+**Severity**: Low. Rare in practice (exact score match is uncommon) but semantically wrong.
+
+**Fix**: Remove the duplicate check entirely, or add a `gameId`/timestamp to scope deduplication.
+
+### 2.4 `removeClearedRows` is O(n × m) per cell (GameController:422-429)
+
+For each of ~200 grid entries, `linesToClear.filter { $0 > entry.key.y }` scans the cleared-rows array. With 4 cleared rows and a full board, ~800 filter calls. The array is already sorted — a `Set<Int>` lookup for the "below this row" count would be O(1) per cell.
+
+**Severity**: Low. Not a measurable hotspot at 200 cells, but incorrect complexity class.
+
+**Fix**: Pre-compute a `Set<Int>` of cleared rows and use `clearedRows.filter { $0 < entry.key.y }.count` or maintain a running index.
+
+### 2.5 Mutating `canMoveDown()` vs pure `canMoveDown(from:)` (GameController:357 vs 374)
+
+Two overloads serve the same semantic purpose. The mutating version (line 357) increments/decrements `currentY` as side-effect, which is fragile. The pure version (line 374) takes `y` as parameter. The mutating version is only called once (drop timer, line 156).
+
+**Severity**: Low. Code clarity issue.
+
+**Fix**: Remove the mutating `canMoveDown()` and call `canMoveDown(from: currentY)` at the single call site.
+
+---
+
+## 3. Concurrency & Async
+
+### 3.1 `ConsoleGameUI` bridges async/await with DispatchSemaphore (ConsoleGameUI:32, 68-73)
+
+The game-over signal path uses `DispatchSemaphore.wait()` on a global dispatch queue, wrapped in `withUnsafeContinuation`. This blocks a libdispatch thread and crosses concurrency domains. The `tasks.forEach { $0.cancel() }` cleanup after resume is fire-and-forget — cancellation results aren't awaited.
+
+**Severity**: Medium. Works in practice but defeats structured concurrency guarantees.
+
+**Fix**: Replace with an `AsyncStream<Void>` that the input handler finishes on exit. Await cancellation of tasks explicitly.
+
+### 3.2 `wallKickOffsets` is internal-only (Tetromino:119)
+
+The SRS wall-kick function is file-private to `Tetromino.swift`'s module but not `public`. The test target (`TetrisCoreTests`) cannot import it and instead duplicates the entire kick table (lines 295-321). Any future target depending on TetrisCore faces the same duplication.
+
+**Severity**: Low-Medium. Test duplication is a maintenance burden.
+
+**Fix**: Make `public` or provide a `Tetromino.tryRotate(with:grid at:)` encapsulation method.
+
+---
+
+## 4. API & Packaging
+
+### 4.1 `ConsoleUI` missing from Package.swift products
+
+CLAUDE.md lists both `TetrisCore` and `ConsoleUI` as SPM products. Only `TetrisCore` appears in the `products` array (Package.swift:13). External consumers cannot depend on `ConsoleUI`.
+
+**Severity**: Low. No known external consumers.
+
+**Fix**: Add `.library(name: "ConsoleUI", targets: ["ConsoleUI"])`.
+
+### 4.2 README documents `BlockState` as both "Removed" and shows full API (README:289-301)
+
+The section header says "Removed: ...deleted" but then renders the full enum, properties, and API signature. Contradictory — either it's gone or it isn't.
+
+**Severity**: Low. Documentation confusion.
+
+**Fix**: Remove the API block or replace with a migration note.
+
+### 4.3 README control table conflates three behaviors per key (README:58-65)
+
+"Space — Hard Drop / Start New Game / Resume" maps three distinct `ControlEvent` values to one bullet. Similarly "q — Stop Playing / Exit from Game Over" conflates `.stop` and `onExit`.
+
+**Severity**: Low. Reader confusion.
+
+**Fix**: Split per context: "SPACE (playing) — hard drop", "SPACE (game over) — new game", etc.
+
+---
+
+## 5. Test Coverage
+
+### 5.1 Tests verify local helpers, not `GameController` (GameControllerTests:1-439)
+
+All 20+ tests exercise free functions (`isColliding`, `canMoveDown`, `tryRotateWithKicks`) that duplicate internal logic. Zero tests instantiate `GameController`, enqueue events, or assert tick output. A divergence between test helpers and actor internals goes undetected.
+
+**Missing coverage**:
+- State machine transitions (pause → resume → stop → game over → restart)
+- Scoring formula (40/100/300/1200 × level+1)
+- Level progression and drop interval calculation
+- Ghost piece coordinate emission
+- `GameSettings` persistence and listener notification
+- `ScoreStorage` concurrent access safety
+- Hard-drop animation and lock-delay paths
+- Line-clear animation two-phase tick sequence
+
+**Severity**: Medium. Tests pass but don't protect against regressions in the actual engine.
+
+### 5.2 Wall-kick tests mirror internal data (GameControllerTests:293-321)
+
+The test file re-implements `cwKickTable` and `rotationStateCount` — 28 lines of duplicated SRS data. If the kick tables in `Tetromino.swift` change, these tests silently test the wrong offsets.
+
+---
+
+## 6. Minor Issues
+
+### 6.1 `shapes` array allocated on every call (GameController:115, 201, 432)
 
 ```swift
 let shapes: [TetrominoShape] = [.I, .O, .T, .S, .Z, .J, .L]
 ```
 
-Allocated fresh in `init()`, `resetGame()`, and `spawnNextPiece()`. Should be a private static constant.
+Allocated fresh in `init()`, `resetGame()`, and `spawnNextPiece()`. Should be `private static let allShapes`.
+
+### 6.2 `usleep(10000)` deprecated on macOS 13+ (ConsoleInputHandler:41)
+
+10ms poll in the input read loop. `usleep` is available but marked deprecated. Consider `Thread.sleep(for: .milliseconds(10))` or `select()` with timeout on stdin.
+
+### 6.3 Terminal size queried every render (ConsoleRenderer:18)
+
+`ioctl(TIOCGWINSZ)` on every tick. Terminal dimensions are stable during gameplay. Cache and refresh on SIGWINCH.
+
+### 6.4 `TetrominoShape.blocks` allocates new arrays per access (Tetromino:20-61)
+
+Computed property returns fresh `[[[Int]]]` on every call. The shape data is compile-time constant. Pre-compute as `static let`.
 
 ---
 
-## 4. Performance
+## 7. Prioritized Findings
 
-### 4.1 Terminal size queried every render
-
-**File**: `ConsoleRenderer.swift:18`
-
-`terminal.getTerminalSize()` calls `ioctl` on every tick (~60fps). Terminal dimensions rarely change during gameplay.
-
-**Fix**: Cache with `lazy` or `@TaskLocal`/`@Sendable` snapshot updated on SIGWINCH.
-
-### 4.2 Grid format still dense
-
-**File**: `GameEvent.swift:8`, `GameController.swift:54`, `BlockState.swift`
-
-The internal grid is `[[BlockState]]` (200 cells). Every `render()` call copies the entire grid. The sparse dictionary approach (discussed on PR #11) would eliminate these copies.
-
----
-
-## 5. UX & Design Issues
-
-### 5.1 No game-over restart loop
-
-**File**: `ConsoleGameUI.swift:68-73`
-
-After game over, the UI waits on `doneSemaphore` for the user to press `q`. There is no loop that restarts the game. Traditional Tetris shows the score, then accepts space to play again.
-
-### 5.2 Hard-coded grid dimensions
-
-**File**: `ConsoleRenderer.swift:20-21`
-
-`width = 10`, `height = 20` are hardcoded. These match the game logic constants but there is no synchronization — if the game grid size ever changes, the renderer silently misaligns.
-
-### 5.3 Hard-coded controls in renderer
-
-**File**: `ConsoleRenderer.swift:100-106`
-
-Controls are a static string array embedded in the renderer. These should be data-driven or configurable so changing keybindings doesn't require editing the renderer.
+| # | Issue | Severity | Effort |
+|---|---|---|---|
+| 1 | Hard-drop double-input during animation | Medium | 5 min |
+| 2 | `rotationIndex` should be `let` | Medium | 1 min |
+| 3 | ConsoleGameUI semaphore in async context | Medium | 15 min |
+| 4 | Tests don't exercise GameController | Medium | 30 min |
+| 5 | ScoreStorage duplicate rejection | Low | 2 min |
+| 6 | `removeClearedRows` complexity | Low | 5 min |
+| 7 | Two `canMoveDown` overloads | Low | 2 min |
+| 8 | `ConsoleUI` missing from products | Low | 1 min |
+| 9 | README contradictions | Low | 5 min |
+| 10 | Minor allocations, deprecated calls | Low | 5 min |
 
 ---
 
-## 6. Test Coverage
+## 8. Conclusion
 
-### 6.1 Missing critical paths
+The project has a **strong architectural foundation** — clean layer separation, validated state machine, actor-based concurrency, and an efficient sparse grid. The SRS wall-kick implementation is correct. The public API (tick stream, `GameDisplayState`, `GameSettings`) is well-designed for consumer embedding.
 
-| Path | Status |
-|------|--------|
-| State machine transitions | Not tested |
-| `GameSettings` listener notification | Not tested |
-| ScoreStorage concurrency | Not tested |
-| Game-over -> restart flow | Not tested |
-| `ConsoleRenderer` output | Not tested |
-| `ConsoleInputHandler` key mapping | Not tested |
-| `isHardDropAnimated` behavior | Not tested |
-| `isLineClearAnimated` behavior | Not tested |
-| Score multipliers | Not tested |
-
-### 6.2 Tests use stale internal types
-
-The tests reference `[[BlockState]]` grid type which is the dense representation. Tests duplicate `isColliding()` and `canMoveDown()` — internal helpers that can diverge from the real implementation.
-
-### 6.3 Tests don't exercise async actor behavior
-
-All tests avoid `await` by testing pure logic in isolation. The actor's timing-dependent behavior (drop timer, lock delay, state transitions) is never tested.
-
----
-
-## 7. Code Quality Notes
-
-### 7.1 GameState is not public
-
-**File**: `GameState.swift:1`
-
-`enum GameState` is `Sendable` but not `public`. It's never exposed outside the module, so the `Sendable` conformance is unnecessary API surface.
-
-### 7.2 render() called from multiple paths
-
-`render()` is called from the drop timer task, the input listener, and `start()`. This means the tick stream can yield events from concurrent actor contexts if any path races. In practice the actor serializes access, but the call sites make it easy to miss a path.
-
-### 7.3 ConsoleGameUI uses @unchecked Sendable
-
-**File**: `ConsoleGameUI.swift:7`
-
-`input` and `currentDisplayState` are accessed from both the async task (tick loop) and background thread (input handler) without synchronization.
-
----
-
-## 8. Prioritized Recommendations
-
-| # | Issue | Priority | Effort | Notes |
-|---|---|---|---|---|
-| 1 | PersistentGameSettings notify() deadlock | Critical | 5 min | Remove lock from notify() |
-| 2 | ScoreStorage race | High | 10 min | Serial queue instead of NSLock |
-| 3 | Hard-drop movement gap | Medium | 10 min | Also check pieceBlockedOnLastTick |
-| 4 | Delete BlockState.swift | Medium | 2 min | Dead code |
-| 5 | Tests duplicate helpers | Medium | 15 min | Use GameController API |
-| 6 | Cache terminal size | Low | 2 min | |
-| 7 | Static shapes constant | Low | 2 min | |
-| 8 | Add game-over restart loop | Low | 10 min | UX improvement |
-| 9 | Merge PR #11 (sparse grid) | Low | 5 min | |
-
----
-
-## 9. Conclusion
-
-The project has a **strong architectural foundation** — clean layer separation, validated state machine, actor-based concurrency, and event-driven design. The core game logic is well-implemented.
-
-The most impactful fixes are:
-1. **PersistentGameSettings notify()** — broken deadlock
-2. **ScoreStorage thread safety** — race condition on concurrent access
-3. **Hard-drop movement blocking** — gap in state protection
-
-The sparse-grid PR (#11) addresses the grid performance optimization but has not been merged.
+The most actionable items are: (1) guard hard-drop input during animation, (2) lock `rotationIndex` as `let`, (3) migrate the game-over signal from `DispatchSemaphore` to async primitives, and (4) add integration tests that exercise `GameController` directly rather than mirrored helpers.
