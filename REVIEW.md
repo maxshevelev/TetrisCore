@@ -299,11 +299,11 @@ public var description: String {
 
 **Severity**: Cosmetic.
 
-### 6.5 `ControlEvent` naming: `.start` vs `.hardDrop` for game-over state (ControlEvent + ConsoleInputHandler)
+### ✅ 6.5 `ControlEvent` naming: `.start` for game-over restart (ControlEvent + ConsoleInputHandler)
 
-Both `.start` (explicit new game) and `.hardDrop` (also starts new game in game over) exist. The ConsoleInputHandler maps Space to `.hardDrop` in game over state (line 69 of ConsoleInputHandler), but the README says "New game" for Space in game over. This is inconsistent naming — Space maps to `.hardDrop` which *acts* as `.start` in game over.
+**Fixed**: ConsoleInputHandler now maps Space → `.start` in game over state (line 69). The `hardDropPiece()` method also guards `guard isPlaying else { return }` to prevent any game-over restart from hardDrop. Only `.start` can restart the game.
 
-**Severity**: Low. The behavior is correct; the naming is confusing.
+**Verdict**: Fixed.
 
 ---
 
