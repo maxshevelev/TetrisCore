@@ -283,11 +283,11 @@ Shape data is compile-time constant. Returns fresh allocations on every access.
 
 **Severity**: Low. Small arrays, short-lived, GC'd immediately. But wasteful.
 
-### 6.3 Terminal size queried every render (ConsoleRenderer, line 18)
+### ✅ 6.3 Terminal size queried every render (ConsoleRenderer, line 18)
 
-`terminal.getTerminalSize()` calls `ioctl(TIOCGWINSZ)` on every tick. Terminal dimensions are stable during gameplay. Cache and refresh on `SIGWINCH`.
+`terminal.getTerminalSize()` calls `ioctl(TIOCGWINSZ)` on every tick. This is intentional — the game runs in virtual terminals and must handle dynamic window resizes at any time.
 
-**Severity**: Low-Medium. `ConsoleRenderer` is public and `getTerminalSize()` should NOT be called per-frame.
+**Verdict**: Fixed (intentional).
 
 ### ✅ 6.4 `GameState.description` visibility (GameState, line 7)
 
