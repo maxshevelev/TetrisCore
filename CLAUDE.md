@@ -66,7 +66,7 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 - ✅ Score table with persistent JSON storage and game-over overlay — no date field, classical scoring
 - ✅ Color abstraction: `TetrominoColor` (TetrisCore) → `ColorPalette` (ConsoleUI)
 - ✅ `Tetromino` immutable struct, `Sendable`
-- ✅ `Tetromino.rotationIndex` is now `let` (immutable)
+- ✅ `TetrominoShape.blocks` uses precomputed `static let` constants — zero per-call allocations (fixed review §6.2)
 - ✅ `log(level, message)` — generic log method with `LogLevel` gating
 - ✅ All log messages use `privacy: .public`
 - ✅ Line clearing / line-clear animation unit tests added
@@ -80,8 +80,18 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 - ✅ `InputBuffer` actor for input buffering
 - ✅ Game-over signal: `DispatchSemaphore` → native `AsyncStream<Void>` (async-first)
 - ✅ Ghost piece bg+fg colors (254 palette)
+- ✅ REVIEW items resolved (2.1, 6.3, 6.4, 6.5, 7.1, 6.2) — docs updated
 
-## Remaining Issues (tracked in REVIEW.md)
+## Review Items Fixed
+
+| Item | Description | Status |
+|------|-------------|--------|
+| §2.1 | Removed dead `nextPiece` assignments in `init()` / `resetGame()` | ✅ Fixed |
+| §6.2 | `TetrominoShape.blocks` precomputed as `static let` — zero per-call allocation | ✅ Fixed |
+| §6.3 | Per-frame `TIOCGWINSZ` — intentional for dynamic resizing | ✅ Documented |
+| §6.4 | `ModelState.description` visibility changed to internal | ✅ Fixed |
+| §6.5 | `.hardDrop` / `.start` strict separation verified + documented | ✅ Documented |
+| §7.1 | ScoreStorage iOS path safety (explicit `#elseif os(iOS)` + `??` fallback) | ✅ Fixed |
 
 ⚠️ `hardDropPiece()` lacks `!isHardDropAnimating` guard at the control-event dispatch level — `moveLeft`/`moveRight`/`rotate` all guard, `hardDrop` does not (see REVIEW.md §2.4)
 ⚠️ `ScoreStorage.add()` rejects legitimate duplicate scores globally — same player + same score across two separate games is dropped (see REVIEW.md §2.5)
