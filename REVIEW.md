@@ -1,7 +1,7 @@
 # TetrisCore — Full Project Review
 
 **Date**: 2026-05-29
-**Branch**: tetromino-immutable-rotationIndex
+**Branch**: main
 **Files**: 13 TetrisCore sources, 6 ConsoleUI sources, 1 test file, Package.swift
 **Scope**: All source files, Package.swift, README.md, CLAUDE.md
 
@@ -30,75 +30,60 @@
 | **`ConsoleGameUI` is `@unchecked Sendable`** | Medium | `currentDisplayState` is written from the input queue thread (line 55 of ConsoleGameUI) and read from `processByte` (line 80 of ConsoleInputHandler). No synchronization. Race window is narrow but technically UB under Swift 6. |
 | **`ConsoleInputHandler` is `@unchecked Sendable`** | Low | Accessed only from `inputQueue` except `running` and `exitContinuation` which are set on the caller thread. Works in practice but violates Swift 6 concurrency rules. |
 | **`spawnNewPiece` / `spawnNextPiece` naming** | Low | Private `spawnNewPiece()` (lines 437–449) calls private `spawnNextPiece()` (line 448) on `self`. Three public consumers (`restart`, `clearLinesPrivate`, `init`) call `spawnNewPiece` which calls `spawnNextPiece`. Easy to confuse. |
-| **iOS paths use `fatalError`** | Medium | `PersistentGameSettings.tetrisDirectory()` uses `#else` to fall to `applicationSupportDirectory` — safe. But `ScoreStorage.tetrisDirectory()` at file scope (line 79 of ScoreStorage.swift) has no `#if os(macOS)` guard — the `#else` falls through the `tetrisDirectory()` function which itself is not `#if`-guarded. iOS will crash on `homeDirectoryForCurrentUser` if compiled for iOS target. |
 
 ---
 
 ## 2. Bugs & Correctness
 
-### ✅ 2.1 ~~`nextPiece` assigned twice in `init()` and `resetGame()`~~ **Fixed** (GameController)
+### ⚠️ 2.1 `ScoreStorage.add()` deduplicates globally (ScoreStorage, line 35)
 
-**Fixed**: Removed the duplicate `nextPiece` assignment in both `init()` and `resetGame()`. The first allocation was dead code — both paths were random draws, but discarding one was misleading.
+```swift
+guard !loadScores().contains(where: { $0.score == score && $0.playerName == playerName }) else { ... }
+```
 
-### ✅ 2.2 ~~`hardDropPiece()` can set `pendingHardDropDuration` during animation~~ **Fixed** (GameController)
+Scores are deduplicated across all games. A player who achieves the same score in two separate sessions will have the second score rejected.
 
-**Fixed**: Added `!isHardDropAnimating` guard to prevent leaking animation state on rapid hard-drop input.
+**Severity**: Medium.
 
-### ✅ 2.3 ~~`hardDropPiece()` with `lockImmediatelyAfterHardDrop = false` leaves cancelled timer dangling~~ **Fixed** (GameController)
+### ⚠️ 2.2 `removeClearedRows(_:)` is O(n × m) (GameController, line 423)
 
-**Fixed**: The else-branch now calls `resetDropTimer()` after the animation task completes, restarting the drop timer when `lockImmediatelyAfterHardDrop = false`.
+```swift
+let shift = linesToClear.filter { $0 > entry.key.y }.count
+```
 
-### ✅ 2.4 ~~`ScoreStorage.add()` deduplicates globally~~ **Fixed** (ScoreStorage)
-
-**Fixed**: Removed global dedup guard. Scores are now scoped per-game — deduplication is per-session, not cross-game.
-
-### ✅ 5 ~~`removeClearedRows(_:)` is O(n × m)~~ **Fixed** (GameController, line 424)
-
-**Fixed**: Pre-computed a `Set<Int>` for cleared rows to eliminate O(n × m) filter inside the loop.
-
-**Severity**: Low. ✅ Fixed — O(n) with O(1) lookups.
-
-`linesToClear.filter` still iterates the cleared rows array for every grid entry. With ~200 cells and 4 cleared rows = 800 iterations. Pre-compute a `Set<Int>` for O(1) membership.
+The filter iterates `linesToClear` for every grid entry. With ~200 cells and 4 cleared rows = 800 iterations. Pre-compute a `Set<Int>` for O(1) membership.
 
 **Severity**: Low. Unmeasurable at 200 cells. But unnecessary.
 
-###  6 ~~`canMoveDown(from:)` returns `false` for `y >= height`~~ **Fixed** (GameController, line 376)
+### ⚠️ 2.3 `canMoveDown(from:)` returns `false` for `y >= height` (GameController, line 375)
 
-When the piece is entirely below the grid (`y >= height`), `canMoveDown` returns `false` because `py >= height` is true. But the piece is already off the board.
+When the piece is entirely below the grid (`y >= height`), `canMoveDown` returns `false` because `py >= height` is true. But the piece is already off the board — it shouldn't be blocked.
 
 **Severity**: Low. `ghostPieceCoords` iterates upward, so the piece is always on or above the board. No real-world impact.
 
-### 2.7 Ghost piece not emitted after hard drop animation (GameController, line 500)
+### ⚠️ 2.4 `shapes` array allocated on every call (GameController, lines 115, 200, 430)
+
+```swift
+let shapes: [TetrominoShape] = [.I, .O, .T, .S, .Z, .J, .L]
+```
+
+Allocated fresh in `init()`, `resetGame()`, and `spawnNextPiece()`. Should be `private static let allShapes`.
+
+**Severity**: Low. Negligible per-call cost; wasted allocation pattern.
+
+###  2.5 Ghost piece not emitted after hard drop animation (GameController)
 
 When `isHardDropAnimated = true` and `lockImmediatelyAfterHardDrop = false`, the ghost piece coordinates and the hard-drop hint emit on different ticks.
 
 **Severity**: Low. The ConsoleUI renderer accumulates state correctly.
 
-### ✅ 2.8 ~~`nextPiece` assigned twice in `init()` and `resetGame()`~~ **Fixed** (GameController)
-
-**Fixed**: Removed the duplicate `nextPiece` assignment. First assignment was dead code (both were random draws, but discarding one was misleading).
-
-### ✅ 2.9 ~~`hardDropPiece()` animation state leak~~ **Fixed** (GameController)
-
-**Fixed**: Added `!isHardDropAnimating` guard to prevent animation state leaking on rapid hard-drop input.
-
-### ✅ 2.10 ~~`ScoreStorage.add()` global dedup~~ **Fixed** (ScoreStorage)
-
-**Fixed**: Replaced global dedup guard with per-game scoping. Scores are now deduplicated within one game, not across all time.
-
-### ✅ 6.8 ~~`removeClearedRows` O(n × m)~~ **Fixed** (GameController)
-
-**Fixed**: Pre-computed `Set<Int>` for cleared row lookups, eliminating O(n × m) filter inside the loop.
-
-### ✅ 6.9 ~~`canMoveDown` false for `y >= height`~~ **Fixed** (GameController)
-
-**Fixed**: Returns `true` when `y >= height` — piece is off the board, not blocked.
-
 ---
 
-### 3.1 `ConsoleGameUI` and `ConsoleInputHandler` are `@unchecked Sendable`
+## 3. Concurrency & Threading
 
-Both classes are marked `@unchecked Sendable` with no actual synchronization for cross-thread reads. `currentDisplayState` in `ConsoleInputHandler` is written from the `inputQueue` thread and read from `processByte` which runs on the same queue — this is fine within the same queue. But `ConsoleGameUI.currentDisplayState` is written from `ConsoleGameUI`'s tick task (line 55: `input.currentDisplayState = ...`) and read from `ConsoleInputHandler.processByte` (line 80: `self.currentDisplayState == .gameOver`) on the `inputQueue`. These are the *same* queue, so the read is on the same thread as the write — actually fine.
+### ⚠️ 3.1 `ConsoleGameUI` and `ConsoleInputHandler` are `@unchecked Sendable`
+
+Both classes are marked `@unchecked Sendable` with no actual synchronization for cross-thread reads. `ConsoleGameUI.currentDisplayState` is written from the tick task and read from `ConsoleInputHandler.processByte` on the `inputQueue`. These are the *same* queue, so the read is on the same thread as the write — actually fine.
 
 The real concern is `ConsoleGameUI` itself: `tasks` array is accessed from `run()` and potentially from other callers. No lock protects it.
 
@@ -106,13 +91,13 @@ The real concern is `ConsoleGameUI` itself: `tasks` array is accessed from `run(
 
 **Fix**: Use a dedicated serial queue for all access to `currentDisplayState`, or make it `actor`-backed.
 
-### 3.2 `PersistentGameSettings` is `@unchecked Sendable` (GameSettings, line 20)
+### ⚠️ 3.2 `PersistentGameSettings` is `@unchecked Sendable` (GameSettings, line 20)
 
 Protected by `NSLock` — safe. `notify()` deliberately releases the lock before iterating listeners (deadlock avoidance) — well-documented and correct.
 
 **Verdict**: OK as-is.
 
-### 3.3 `tickContinuation` is force-unwrapped (GameController, line 110)
+### ⚠️ 3.3 `tickContinuation` is force-unwrapped (GameController, line 110)
 
 ```swift
 var tkc: AsyncStream<Set<GameEvent>>.Continuation!
@@ -128,7 +113,7 @@ If `AsyncStream` init calls the closure synchronously, `tkc` is set before the a
 
 ## 4. Test Coverage
 
-### 4.1 Tests verify mirrored helpers, not `GameController`
+### ⚠️ 4.1 Tests verify mirrored helpers, not `GameController`
 
 All 28 tests exercise free functions (`isColliding`, `canMoveDown`, `tryRotateWithKicks`, `cwKickTable`) that duplicate internal logic from `GameController` and `Tetromino`. Zero tests instantiate `GameController`, enqueue events, or assert tick output. A divergence between test helpers and actor internals goes undetected.
 
@@ -163,11 +148,11 @@ The table at README lines 60–67 maps each key to one action per state. Space m
 
 **Severity**: Low. Reader confusion. The table is clear enough if read carefully.
 
-### 5.2 README API documentation is inconsistent with actual code
+### 5.2 README API documentation is consistent with actual code
 
 - `GameController` init parameters: README line 128–133 shows `Logger()` default, but the actual default is `Logger()` (subsystem: "com.maxik.tetris") — correct.
-- `ControlEvent` enum: README line 224 lists all cases including `.start` — **correct now** (was missing in prior review).
-- `GameDisplayState` doc: README line 294-298 matches actual enum — **correct**.
+- `ControlEvent` enum: README line 224 lists all cases including `.start` — correct.
+- `GameDisplayState` doc: README line 294–298 matches actual enum — correct.
 
 **Verdict**: README is current. No issues found.
 
@@ -182,95 +167,39 @@ The table header separators are misaligned. Minor formatting issue.
 
 **Severity**: Cosmetic.
 
-### 5.4 README `ScoreStorage` note is incomplete
-
-README line 375 says "This behavior will be fixed in a future release" — this is a TODO marker in the documentation itself.
-
-**Severity**: Low. Documentation debt.
-
 ---
 
-## 6. Code Quality
-
-### ✅ §6.1 ~~`shapes` array allocated on every call~~ **Fixed** (GameController, lines 115, 201, 432)
-
-**Fixed**: `private static let allShapes` — allocated once at startup, not per call.
-
-### ✅ §6.2 ~~`TetrominoShape.blocks` allocates fresh arrays on every access~~ **Fixed** (Tetromino, line 20)
-
-**Fixed**: `private static let` constants (`IStates`, `OStates`, `TStates`, `SStates`, `ZStates`, `JStates`, `LStates`) — zero per-call allocation. `state(at:)` returns references to the static arrays.
-
-### ✅ 6.3 Terminal size queried every render (ConsoleRenderer, line 18)
-
-`terminal.getTerminalSize()` calls `ioctl(TIOCGWINSZ)` on every tick. This is intentional — the game runs in virtual terminals and must handle dynamic window resizes at any time.
-
-**Verdict**: Fixed (intentional).
-
-### ✅ 6.4 `GameState.description` visibility (GameState, line 7)
-
-**Fixed**: Changed `public var description` → `var description`. `GameState` is internal; the description is only used for debug logging inside TetrisCore.
-
-### ✅ 6.5 `ControlEvent` naming: `.start` for game-over restart (ControlEvent + ConsoleInputHandler)
-
-**Fixed**: ConsoleInputHandler now maps Space → `.start` in game over state (line 69). The `hardDropPiece()` method also guards `guard isPlaying else { return }` to prevent any game-over restart from hardDrop. Only `.start` can restart the game.
-
-**Verdict**: Fixed.
-
----
-
-## 7. iOS Compatibility
-
-### ✅ 7.1 ScoreStorage iOS path (ScoreStorage, line 80)
-
-**Fixed**: Replaced file-scope `tetrisDirectory()` with `ScoreStorage` static property using explicit `#elseif os(iOS)` and safe `??` fallback for `applicationSupportDirectory`. No more force-unwrap `first!`.
-
-**Verdict**: Fixed.
-
-### ✅ 7.2 `ConsoleInputHandler` uses `Darwin` (ConsoleInputHandler, line 3)
-
-`Darwin` is macOS/iOS compatible. `tcgetattr`, `tcsetattr`, `winsize`, `ioctl` are all available on iOS. But stdin raw mode won't work in a normal iOS app (no terminal). ConsoleUI is correctly documented as macOS-only.
-
-**Verdict**: ConsoleUI is macOS-only (correct). TetrisCore iOS target is safe — ScoreStorage uses explicit `#elseif os(iOS)` with safe unwrapping.
-
----
-
-## 8. Prioritized Findings
+## 6. Prioritized Findings
 
 | # | Status | Issue | Severity | Effort |
-|---|--------|-------|----------|--------|
-| 1 | ✅ | ~~`nextPiece` assigned twice~~ — **FIXED** (see §2.8) | Low | Done |
-| 2 | ✅ | ~~`hardDropPiece()` missing `!isHardDropAnimating` guard~~ — **FIXED** (see §2.9) | Low | Done |
-| 3 | ⚠️ | **Drop timer dead after hard drop with animation** (lockImmediatelyAfterHardDrop = false) | Medium | 2 min |
-| 4 | ✅ | ~~`ScoreStorage.add()` deduplicates globally~~ — **FIXED** (see §2.10) | Low | Done |
-| 5 | ✅ | ~~`removeClearedRows` O(n × m)~~ — **FIXED** (pre-compute `Set<Int>`) | Low | Done |
-| 6 | ⚠️ | Tests don't exercise `GameController` at all — no integration tests | Medium | 30 min |
-| 7 | ⚠️ | `ConsoleGameUI` / `ConsoleInputHandler` `@unchecked Sendable` | Low-Medium | 10 min |
-| 8 | ✅ | ~~`shapes` array, `blocks` computed, terminal size — cached~~ — **FIXED** (§6.1–6.3) | Low | Done |
-| 9 | ⚠️ | README scoring table alignment | Cosmetic | 1 min |
-| 10 | ✅ | ~~`canMoveDown(from:)` false for off-board~~ — **FIXED** (see §6.9) | Low | Done |
+|---|--------|---|----|---|
+| 1 | ⚠️ | Tests don't exercise `GameController` at all — no integration tests | Medium | 30 min |
+| 2 | ⚠️ | `ConsoleGameUI` / `ConsoleInputHandler` `@unchecked Sendable` | Low-Medium | 10 min |
+| 3 | ⚠️ | Drop timer dead after hard drop with animation (`lockImmediatelyAfterHardDrop = false`) | Medium | 2 min |
+| 4 | ⚠️ | ScoreStorage dedup is global, not per-game | Medium | 5 min |
+| 5 | ⚠️ | `removeClearedRows` O(n × m) — pre-compute `Set<Int>` | Low | 2 min |
+| 6 | ⚠️ | `canMoveDown` returns false for off-board pieces | Low | 1 min |
+| 7 | ⚠️ | `shapes` array allocated on every call | Low | 2 min |
+| 8 | ⚠️ | README scoring table alignment | Cosmetic | 1 min |
 
 ---
 
-## 9. Conclusion
+## Conclusion
 
 The project has a **strong architectural foundation** — clean layer separation, validated state machine, actor-based concurrency, sparse grid, and correct SRS wall-kick. The public API (tick stream, `GameDisplayState`, `GameSettings`) is well-designed for consumer embedding.
 
-**Fixed since this review**:
+**Previously fixed (no longer concerns)**:
 
-1. ✅ **Removed double `nextPiece` assignment** (§2.8) — dead code
-2. ✅ **Added `!isHardDropAnimating` guard to `hardDropPiece()`** (§2.9) — prevents leak
-3. ✅ **Restarted drop timer after hard drop animation** (§2.3) — fixes freeze
-4. ✅ **Fixed `ScoreStorage.add()` dedup scope** (§2.10) — now per-game
-5. ✅ **Pre-computed `Set<Int>` for `removeClearedRows` lookups** (§6.8) — eliminated O(n × m)
-6. ✅ **`canMoveDown` returns `true` for `y >= height`** (§6.9) — accurate semantics
-7. ✅ **`blocks` computed property uses O(1) dictionary** — eliminated allocations
-8. ✅ **`ScoreStorage` iOS path fixed** (§7.1) — explicit `#elseif os(iOS)` with safe unwrap
-9. ✅ **Per-frame `TIOCGWINSZ` documented as intentional** (§6.3) — virtual term support
-10. ✅ **`GameState.description` visibility reduced to internal** (§6.4) — correct access level
-11. ✅ **`.start` for game-over restart documented** (§6.5) — clarified naming
+1. ✅ Double `nextPiece` assignment — removed dead code
+2. ✅ `hardDropPiece()` animation guard added
+3. ✅ Drop timer restart after hard drop animation
+4. ✅ `TetrominoShape.blocks` static constants — zero per-call allocation
+5. ✅ `GameState.description` visibility reduced to internal
+6. ✅ `.start` for game-over restart documented
+7. ✅ Terminal size per-frame documented as intentional (dynamic resize)
+8. ✅ ScoreStorage iOS path safety with `#elseif os(iOS)`
+9. ✅ ConsoleUI documented as macOS-only
 
 **Remaining (unresolved)**:
 
-1. **Add integration tests that exercise `GameController` directly** (§8, item 6) — current tests verify mirrored helpers, not the engine
-2. **Fix `@unchecked Sendable` classes** (§8, item 7) — Swift 6 compliance
-3. **Fix README scoring table alignment** (§8, item 9) — cosmetic
+See items 1–8 in Prioritized Findings above.
