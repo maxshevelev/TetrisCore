@@ -15,6 +15,8 @@ class ConsoleInputHandler: @unchecked Sendable {
     var currentDisplayState: GameDisplayState = .playing
     /// Called when the user presses q on the game-over screen.
     var onExit: (() -> Void)?
+    /// Receives the AsyncStream continuation so this handler can fire the exit signal.
+    internal var exitContinuation: AsyncStream<Void>.Continuation? = nil
 
     func setInputReceiver(_ receiver: InputReceiver) {
         self.inputReceiver = receiver
@@ -45,7 +47,6 @@ class ConsoleInputHandler: @unchecked Sendable {
 
     func stop() {
         running = false
-        // Wait for input queue to finish processing
         inputQueue.sync {}
     }
 
@@ -78,6 +79,7 @@ class ConsoleInputHandler: @unchecked Sendable {
             guard let self else { return }
             if self.currentDisplayState == .gameOver {
                 self.onExit?()
+                self.exitContinuation?.finish()
             } else {
                 await self.inputReceiver?.enqueue(.stop)
             }
