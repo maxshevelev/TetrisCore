@@ -309,28 +309,17 @@ Both `.start` (explicit new game) and `.hardDrop` (also starts new game in game 
 
 ## 7. iOS Compatibility
 
-### 7.1 `ScoreStorage` falls through to macOS path on iOS (ScoreStorage, line 79)
+### ✅ 7.1 ScoreStorage iOS path (ScoreStorage, line 80)
 
-```swift
-private func tetrisDirectory() -> URL {
-#if os(macOS)
-    FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".tetris")
-#else
-    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        .appendingPathComponent("Tetris")
-#endif
-}
-```
+**Fixed**: Replaced file-scope `tetrisDirectory()` with `ScoreStorage` static property using explicit `#elseif os(iOS)` and safe `??` fallback for `applicationSupportDirectory`. No more force-unwrap `first!`.
 
-This function is at file scope (not inside a class), so the `#if os(macOS)` applies. On iOS it falls through to the `#else` branch — which is actually **correct** for iOS. My earlier concern was misplaced.
+**Verdict**: Fixed.
 
-**Verdict**: Safe.
-
-### 7.2 `ConsoleInputHandler` uses `Darwin` (ConsoleInputHandler, line 3)
+### ✅ 7.2 `ConsoleInputHandler` uses `Darwin` (ConsoleInputHandler, line 3)
 
 `Darwin` is macOS/iOS compatible. `tcgetattr`, `tcsetattr`, `winsize`, `ioctl` are all available on iOS. But stdin raw mode won't work in a normal iOS app (no terminal). ConsoleUI is correctly documented as macOS-only.
 
-**Verdict**: ConsoleUI is macOS-only (correct). TetrisCore iOS target is safe.
+**Verdict**: ConsoleUI is macOS-only (correct). TetrisCore iOS target is safe — ScoreStorage uses explicit `#elseif os(iOS)` with safe unwrapping.
 
 ---
 
