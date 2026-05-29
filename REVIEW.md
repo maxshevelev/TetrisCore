@@ -289,15 +289,9 @@ Shape data is compile-time constant. Returns fresh allocations on every access.
 
 **Severity**: Low-Medium. `ConsoleRenderer` is public and `getTerminalSize()` should NOT be called per-frame.
 
-### 6.4 `GameState` description is unnecessarily `public` (GameState, line 7)
+### ✅ 6.4 `GameState.description` visibility (GameState, line 7)
 
-```swift
-public var description: String {
-```
-
-`GameState` itself is not public. The description is only used internally for debug logging. Making it `public` is unnecessary.
-
-**Severity**: Cosmetic.
+**Fixed**: Changed `public var description` → `var description`. `GameState` is internal; the description is only used for debug logging inside TetrisCore.
 
 ### ✅ 6.5 `ControlEvent` naming: `.start` for game-over restart (ControlEvent + ConsoleInputHandler)
 
