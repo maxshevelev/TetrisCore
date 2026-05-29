@@ -22,7 +22,7 @@ public final class ScoreStorage: Sendable {
         if let filePath {
             self.filePath = filePath
         } else {
-            self.filePath = tetrisDirectory().appendingPathComponent("scores.json")
+            self.filePath = Self.defaultScoresPath
         }
     }
 
@@ -76,11 +76,22 @@ public final class ScoreStorage: Sendable {
     }
 }
 
-private func tetrisDirectory() -> URL {
+private extension ScoreStorage {
+    static var defaultScoresPath: URL {
 #if os(macOS)
-    FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".tetris")
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".tetris")
+            .appendingPathComponent("scores.json")
+#elseif os(iOS)
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first 
+            .map { $0.appendingPathComponent("Tetris").appendingPathComponent("scores.json") }
+            ?? .applicationDirectory.deletingLastPathComponent()
+                .appendingPathComponent("scores.json")
 #else
-    FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        .appendingPathComponent("Tetris")
+        FileManager.default.currentDirectoryPath
+            .appendingPathComponent(".tetris")
+            .appendingPathComponent("scores.json")
 #endif
+    }
 }
