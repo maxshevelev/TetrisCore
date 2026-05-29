@@ -7,35 +7,37 @@ A modular, UI-agnostic Tetris game engine written in Swift. Ships with a console
 The project is split into three targets with strict layer separation:
 
 ```
-┌─────────────────────────────────────────────┐
-│  tetris (executable)                        │
-│  CLI entry point with swift-argument-parser │
-├─────────────────────────────────────────────┤
-│  ConsoleUI (macOS only)                     │
-│  Reference terminal implementation          │
-│  ─ ConsoleRenderer (ANSI rendering)         │
-│  ─ ConsoleInputHandler (raw mode stdin)     │
-│  ─ ColorPalette (ANSI color mapping)        │
-├─────────────────────────────────────────────┤
-│  TetrisCore (macOS + iOS)                   │
-│  UI-agnostic game engine                    │
-│  ─ GameController (actor)                   │
-│  ─ GameEvent (diff-style event enum)        │
-│  ─ Tetromino, TetrominoShape definitions    │
-│  ─ ScoreStorage (JSON persistence)          │
-│  ─ InputReceiver / ControlEvent protocol    │
-└─────────────────────────────────────────────┘
+┌──────────────────────────────────┐
+│  tetris (executable)             │
+│  CLI entry point                 │
+│  with swift-argument-parser      │
+├──────────────────────────────────┤
+│  ConsoleUI (macOS only)          │
+│  Reference terminal implementation │
+│  ─ ConsoleRenderer (ANSI rendering) │
+│  ─ ConsoleInputHandler (raw mode) │
+│  ─ ColorPalette (ANSI color mapping) │
+├──────────────────────────────────┤
+│  TetrisCore (macOS + iOS)        │
+│  UI-agnostic game engine         │
+│  ─ GameController (actor)        │
+│  ─ GameEvent (diff-style events) │
+│  ─ Tetromino, TetrominoShape     │
+│  ─ ScoreStorage (JSON persistence) │
+│  ─ InputReceiver / ControlEvent   │
+│  ─ GameSettings / GameState      │
+└──────────────────────────────────┘
 ```
 
 **Key design decisions:**
 
 - **Actor-based concurrency**: `GameController` is a Swift `actor`, providing data-race-free access to game state across concurrent contexts. All state mutations are serialized through the actor's executor.
 - **Event-driven input**: An internal `InputBuffer` actor decouples input production from consumption. UI layers send `ControlEvent` values via `enqueue(_:)`, and the game loop processes them sequentially.
-- **Diff-style tick stream**: `GameController` exposes `nonisolated public let tick: AsyncStream<Set<GameEvent>>` — each tick yields a set of `GameEvent` values for only the changed fields. Absence from the set means unchanged. Consumers accumulate state by switching over events.
-- **Validated state machine**: All `GameState` transitions go through a `transition(to:)` method backed by a `validTransitions` table. Invalid transitions are silently rejected — the state graph is defined in one place, not scattered across call sites.
-- **Timer lifecycle in didSet**: Drop and lock timers are started/stopped exclusively in `state.didSet`, ensuring consistent lifecycle management regardless of which code path triggers the transition.
+- **Diff-style tick stream**: `GameController` exposes `nonisolated public let tick: AsyncStream<Set<GameEvent>>` — each tick yields a set of changed fields. Absence from the set means unchanged. Consumers accumulate state by switching over events.
+- **Validated state machine**: All `GameState` transitions go through a `transition(to:)` method backed by a `validTransitions` table. Invalid transitions are silently rejected — the state graph is defined in one place.
+- **Timer lifecycle in didSet**: Drop and lock timers are started/stopped exclusively in `state.didSet`, ensuring consistent lifecycle management.
 - **Color abstraction**: `TetrominoColor` (in TetrisCore) is a UI-agnostic color enum. Each renderer maps it to its own color system — `ColorPalette` does this for ANSI consoles, a native app would map it to `UIColor`/`NSColor`.
-- **Sparse grid**: The game grid uses `[PieceCoordinate: TetrominoColor]` — a dictionary keyed by coordinate, storing only filled cells. An empty board starts with zero entries. Early game frames touch fewer than 40 cells; the full board touches ~200. This eliminates the per-tick copy of 200 blank cells and makes line-clear scan proportional to filled cells rather than grid height.
+- **Sparse grid**: The game grid uses `[PieceCoordinate: TetrominoColor]` — only filled cells are stored. An empty board has zero entries. Iteration cost is proportional to filled cells, not grid size.
 
 ## Console UI (Reference Implementation)
 
@@ -55,14 +57,14 @@ swift run tetris -d debug -u Alice
 
 ### Controls
 
-| Key | Action |
-|-----|--------|
-| `j` | Move left |
-| `l` | Move right |
-| `k` | Rotate |
-| `Space` | Hard drop / Start new game / Resume |
-| `Esc` | Pause / Resume |
-| `q` | Stop playing / Exit from game over |
+| Key | Playing | Paused | Game Over |
+|-----|---------|--------|-----------|
+| `j` | Move left | — | — |
+| `l` | Move right | — | — |
+| `k` | Rotate (CCW) | — | — |
+| `Space` | Hard drop | Resume | New game |
+| `Esc` | Pause | Resume | — |
+| `q` | Stop | — | Exit |
 
 ### CLI Options
 
@@ -89,13 +91,26 @@ targets: [
     .target(
         name: "YourTarget",
         dependencies: [
-            .product(name: "TetrisCore", package: "tetris"),
+            .product(name: "TetrisCore", package: "TetrisCore"), // Game engine
+            .product(name: "ConsoleUI", package: "TetrisCore"), // macOS only
         ]
     ),
 ]
 ```
 
-Or add directly through Xcode: `File → Add Package Dependencies...` → paste `https://github.com/maxshevelev/VibeTetris` → select `TetrisCore`.
+### `TetrisCore` Only
+
+If you only want the game engine (for a native macOS/iOS implementation):
+
+```swift
+.dependencies: [
+    .product(name: "TetrisCore", package: "TetrisCore"),
+]
+```
+
+### Xcode
+
+Add directly through Xcode: `File → Add Package Dependencies...` → paste `https://github.com/maxshevelev/TetrisCore` → select `TetrisCore` and `ConsoleUI`.
 
 ## API Reference
 
@@ -123,7 +138,7 @@ public init(
 | `logger` | Apple `os.Logger` instance for debug output |
 | `logLevel` | Optional minimum log level for filtering |
 | `scoreStorage` | Backend for persisting top scores to JSON |
-| `settings` | Runtime settings via `GameSettings` protocol (see below). Defaults to `PersistentGameSettings` which reads/writes `settings.json`. |
+| `settings` | Runtime settings via `GameSettings` protocol (see below). Defaults to `PersistentGameSettings`. |
 
 #### Update Stream
 
@@ -133,28 +148,30 @@ public init(
 nonisolated public let tick: AsyncStream<Set<GameEvent>>
 ```
 
-Each tick yields a `Set<GameEvent>` containing only the values that changed since the previous tick. Absence from the set means unchanged. The initial tick sends all fields.
+Each tick yields a `Set<GameEvent>` containing only the changed fields. Absence from the set means unchanged. The initial tick sends all fields.
 
 | Event | Type | Emits when |
 |-------|------|------------|
-| `.grid` | `[PieceCoordinate: TetrominoColor]` | Piece locks, lines are cleared. Sparse representation — only filled cells. Consumers render by iterating the fixed 10×20 grid and looking up each coordinate. |
-| `.pieceBlocks` | `(Set<PieceCoordinate>, color: TetrominoColor, hardDropDuration: TimeInterval?)` | Every tick, move, rotate (current piece position). All blocks share the piece's color, carried separately from the coordinate set. The optional `hardDropDuration` is non-nil when the piece position is the result of a hard drop. |
+| `.grid` | `[PieceCoordinate: TetrominoColor]` | Piece locks, lines are cleared. Sparse representation. |
+| `.pieceBlocks` | `(Set<PieceCoordinate>, color: TetrominoColor, hardDropDuration: TimeInterval?)` | Every tick, move, rotate (current piece position). `hardDropDuration` is non-nil on hard-drop. |
 | `.nextPieceBlocks` | `(Set<PieceCoordinate>, color: TetrominoColor)` | Piece locks (new next piece generated) |
 | `.score` | `Int` | Lines are cleared |
 | `.level` | `Int` | Level advances |
-| `.linesCleared` | `(Int, clearedRows: Set<Int>, animationDuration: TimeInterval)` | Lines are cleared. See [Line-Clear Animation](#line-clear-animation) below. |
+| `.linesCleared` | `(Int, clearedRows: Set<Int>, animationDuration: TimeInterval)` | Lines cleared. See [Line-Clear Animation](#line-clear-animation) below. |
 | `.state` | `GameDisplayState` | Pause, resume, game over, restart |
 | `.topScores` | `[StoredScore]` | Game over (new score saved) |
 | `.playerName` | `String` | Game starts |
+| `.gridSize(width: Int, height: Int)` | | Grid dimensions (sent on first tick) |
+| `.ghostPieceBlocks(Set<PieceCoordinate>)` | | Ghost piece enabled (see `isGhostPieceEnabled`) |
 
 ### Line-Clear Animation
 
 When `isLineClearAnimated` is `true`, line clearing follows a two-phase sequence:
 
 1. **Pre-clear tick**: `.linesCleared(count, clearedRows: {rowIndices}, animationDuration: dur)` fires alongside a `.grid` snapshot showing the locked piece in the still-full rows. The consumer should animate the rows in `clearedRows` out over `animationDuration` (derived from drop cadence: `min(dropInterval * 0.5, 0.25)`).
-2. **Post-clear tick**: After the animation delay, a new `.grid` snapshot fires with the rows removed and the new piece spawned. `.score` and `.linesCleared` update to their new values in this tick.
+2. **Post-clear tick**: After the animation delay, a new `.grid` snapshot fires with the rows removed and the new piece spawned. `.score` and `.linesCleared` update to their new values.
 
-When `isLineClearAnimated` is `false` (console UI default), `clearedRows` is empty and `animationDuration` is zero — the grid updates immediately with no animation hint.
+When `isLineClearAnimated` is `false` (console UI default), `clearedRows` is empty and `animationDuration` is zero — the grid updates immediately.
 
 Consumers accumulate state by switching over events:
 
@@ -176,8 +193,6 @@ Task {
 
 ```swift
 /// Runtime settings — read or modify to change behavior at any time.
-/// Persisted settings (playerName, lockImmediatelyAfterHardDrop) are
-/// written to settings.json on set.
 public let settings: any GameSettings
 ```
 
@@ -188,11 +203,12 @@ public let settings: any GameSettings
 public func start()
 
 /// Send a control event for processing.
-/// - Parameter event: The ControlEvent to enqueue.
 public func enqueue(_ event: ControlEvent) async
 ```
 
-The `InputReceiver` protocol:
+### `InputReceiver`
+
+Protocol for receiving input events. Implemented by `GameController`.
 
 ```swift
 public protocol InputReceiver: AnyObject & Sendable {
@@ -209,20 +225,20 @@ public enum ControlEvent: Sendable {
     case moveLeft
     case moveRight
     case rotate
-    case hardDrop
+    case hardDrop  // Also starts new game when in game over
     case pause
     case resume
     case stop
+    case start     // Explicit new game (game over only)
 }
 ```
 
 - `pause` pauses the game (ignored unless playing).
 - `resume` resumes the game (ignored unless paused).
 - `stop` ends the current game (transitions to game over and saves the score).
-- `hardDrop` also functions as "start new game" when in the game over state.
+- `hardDrop` drops the piece; in game over state it starts a new game.
+- `start` starts a new game (only valid in game over state).
 - Events that don't match the current game state are silently ignored.
-
----
 
 ### `GameSettings`
 
@@ -235,6 +251,7 @@ public protocol GameSettings: AnyObject, Sendable {
     var isHardDropAnimated: Bool { get set }
     var isLineClearAnimated: Bool { get set }
     var initialLevel: Int { get set }
+    var isGhostPieceEnabled: Bool { get set }
     func addListener(_ listener: SettingsUpdateListener)
     func removeListener(_ listener: SettingsUpdateListener)
 }
@@ -246,19 +263,18 @@ public protocol SettingsUpdateListener: AnyObject, Sendable {
 
 | Property | Persisted | Description |
 |----------|-----------|-------------|
-| `playerName` | Yes | Display name for score tracking. Non-empty validation — whitespace-only or empty values are rejected. |
-| `lockImmediatelyAfterHardDrop` | Yes | When `true`, piece locks immediately after hard drop (or after animation if `isHardDropAnimated` is also enabled). |
-| `isHardDropAnimated` | Yes | When `true`, hard drops add a brief visual delay before locking. |
-| `isLineClearAnimated` | Yes | When `true`, line clears follow a two-phase tick sequence with animation hints. |
-| `initialLevel` | Yes | Starting game level (1–10, clamped). Affects drop speed and score multiplier. Default `1`. |
+| `playerName` | Yes | Display name for score tracking. Non-empty validation. |
+| `lockImmediatelyAfterHardDrop` | Yes | Piece locks immediately after hard drop (or after animation) |
+| `isHardDropAnimated` | Yes | Hard drops add a brief visual delay |
+| `isLineClearAnimated` | Yes | Line clears follow a two-phase tick sequence |
+| `initialLevel` | Yes | Starting level (1–10, clamped). Default 1 |
+| `isGhostPieceEnabled` | Yes | Show ghost piece preview (default true) |
 
 The default implementation is `PersistentGameSettings`, which reads initial values from `settings.json` on init.
 
----
-
 ### `PieceCoordinate`
 
-A single coordinate within a piece. All blocks in a piece share the same `TetrominoColor`, which is carried separately in `GameEvent`.
+A single coordinate within a piece.
 
 ```swift
 public struct PieceCoordinate: Hashable, Sendable {
@@ -267,76 +283,53 @@ public struct PieceCoordinate: Hashable, Sendable {
 }
 ```
 
-Note: Coordinates are grid-absolute for `pieceBlocks` and preview-local (0–3) for `nextPieceBlocks`.
-
----
+- For `.pieceBlocks`: grid-absolute coordinates
+- For `.nextPieceBlocks`: preview-local (0–3)
 
 ### `GameDisplayState`
 
-Consumer-facing game state. Internal timer states like `.dropping` and `.locking` are collapsed into `.playing`.
+Consumer-facing game state. Internal timer states (`dropping`, `locking`, `initializing`) are collapsed into `.playing`.
 
 ```swift
-public enum GameDisplayState: Sendable {
+public enum GameDisplayState: Hashable, Sendable {
     case playing   // Game is active — render the board and accept input
     case paused    // Game is paused — show a pause overlay
     case gameOver  // Game is over — show score summary
 }
 ```
 
----
-
-### `BlockState`
-
-> **Removed**: The game grid uses a sparse `[PieceCoordinate: TetrominoColor]` representation.
-> `BlockState.swift` has been deleted. If you depended on this enum, access `TetrominoColor` directly and use `[PieceCoordinate: TetrominoColor]` for grid state.
-
-```swift
-public enum BlockState: Equatable {
-    case empty
-    case filled(TetrominoColor)
-
-    public var isFilled: Bool
-    public var color: TetrominoColor?
-}
-```
-
----
-
 ### `Tetromino` & `TetrominoShape`
 
-Immutable tetromino piece with rotation support.
+Immutable tetromino piece with SRS wall-kick rotation.
 
 ```swift
 public struct Tetromino: Sendable {
     public let shape: TetrominoShape
+    public let rotationIndex: Int  // Immutable
 
     public init(shape: TetrominoShape, rotationIndex: Int = 0)
-
-    /// Current block coordinates relative to piece origin.
+    
     public var blocks: [[Int]]
-
-    /// Block coordinates offset by (x, y) on the grid.
     public func getAbsoluteCoordinates(xOffset: Int, yOffset: Int) -> [(x: Int, y: Int)]
-
-    /// Return a new Tetromino rotated by `offset` 90° steps.
     public func rotated(by offset: Int) -> Tetromino
 }
 
 public enum TetrominoShape: String, Sendable {
     case I, O, T, S, Z, J, L
-
     public var blockColor: TetrominoColor
 }
 ```
 
----
+- `rotationIndex` is `let` (immutable) — use `rotated(by:)` to produce a new `Tetromino`.
+- `blocks` is a computed property that returns the shape's block coordinates for the current rotation state.
+- `rotated(by:)` returns a **new** `Tetromino` — never mutates in place.
 
 ### `TetrominoColor`
 
 UI-agnostic color identifiers for tetromino pieces.
 
 ```swift
-public enum TetrominoColor: Sendable {
+public enum TetrominoColor: Hashable, Sendable {
     case cyan    // I piece
     case yellow  // O piece
     case magenta // T piece
@@ -347,32 +340,29 @@ public enum TetrominoColor: Sendable {
 }
 ```
 
----
-
 ### `ScoreStorage` & `StoredScore`
 
 Persistent top-10 score storage backed by a local JSON file.
 
 ```swift
-public struct StoredScore: Codable, Equatable {
+public struct StoredScore: Codable, Hashable, Equatable, Sendable {
     public let playerName: String
     public let score: Int
-
+    
     public init(playerName: String = "", score: Int)
 }
 
 public final class ScoreStorage: Sendable {
-    /// Default path: ~/.tetris/scores.json on macOS,
-    /// ~/Library/Application Support/Tetris/scores.json on iOS.
-    /// Pass a custom filePath for sandboxed environments.
     public init(filePath: URL? = nil)
-
     @discardableResult
     public func add(score: Int, playerName: String) -> [StoredScore]
-
     public func topScores() -> [StoredScore]
 }
 ```
+
+Default paths:
+- macOS: `~/.tetris/scores.json`
+- iOS: `~/Library/Application Support/Tetris/scores.json`
 
 On iOS, provide a sandbox-relative path:
 
@@ -382,14 +372,14 @@ let scoresPath = documents.appendingPathComponent("scores.json")
 let storage = ScoreStorage(filePath: scoresPath)
 ```
 
----
+> **Note**: `add()` deduplicates by `(playerName, score)` pair globally. Same player scoring the same value twice in different games will result in the second score being silently dropped. This behavior will be fixed in a future release to use game-scoped deduplication.
 
 ### `LogLevel`
 
 ```swift
 public enum LogLevel: String, CaseIterable, Sendable {
     case debug, info, notice, error, fault
-
+    
     public func allows(_ level: LogLevel) -> Bool
 }
 ```
@@ -402,19 +392,22 @@ A level permits messages at itself and higher (debug < info < notice < error < f
 
 Classical Tetris scoring formula:
 
-| Lines cleared | Base score |
-|---------------|------------|
-| 1 (Single)    | 40 |
-| 2 (Double)    | 100 |
-| 3 (Triple)    | 300 |
-| 4 (Tetris)    | 1200 |
+| Lines Cleared | Base Score |
+|---------------|-----------|
+| 1 (Single) | 40 |
+| 2 (Double) | 100 |
+| 3 (Triple) | 300 |
+| 4 (Tetris) | 1200 |
 
 **Final score = base × (level + 1)**
 
-Level advances every 10 lines cleared from `initialLevel` (default 1), capped at 10. Drop speed increases with level (`0.8s` → `0.15s` minimum interval).
+Level advances every 10 lines cleared from `initialLevel` (default 1), capped at 10. Drop speed increases with level (`0.8s` → `0.15s` minimum).
+
+---
 
 ## Persistent Data
 
 | File | Path (macOS) | Path (iOS) | Content |
 |------|-------------|------------|---------|
-| Scores | `~/.tetris/scores.json` | `~/Library/Application Support/Tetris/scores.json` | Top 10 scores with player name |
+| Scores | `~/.tetris/scores.json` | `~/Library/.../Tetris/scores.json` | Top 10 scores with player name |
+| Settings | `~/.tetris/settings.json` | `~/Library/.../Tetris/settings.json` | playerName, lockImmediately, animations, ghost piece, initialLevel |

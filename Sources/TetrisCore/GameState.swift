@@ -4,7 +4,7 @@ enum GameState: CustomStringConvertible, Sendable {
     case paused
     case gameOver
 
-    public var description: String {
+    var description: String {
         switch self {
         case .initializing: return "initializing"
         case .dropping: return "dropping"

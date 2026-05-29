@@ -113,8 +113,7 @@ public actor GameController: InputReceiver {
         self.tick = tks
 
         let shapes: [TetrominoShape] = [.I, .O, .T, .S, .Z, .J, .L]
-        self.nextPiece = Tetromino(shape: shapes.randomElement()!)
-        self.currentPiece = self.nextPiece
+        self.currentPiece = Tetromino(shape: shapes.randomElement()!)
         self.currentX = width / 2 - 2
         self.currentY = 0
         self.nextPiece = Tetromino(shape: shapes.randomElement()!)
@@ -199,8 +198,7 @@ public actor GameController: InputReceiver {
     private func resetGame() {
         grid = [:]
         let shapes: [TetrominoShape] = [.I, .O, .T, .S, .Z, .J, .L]
-        nextPiece = Tetromino(shape: shapes.randomElement()!)
-        currentPiece = nextPiece
+        currentPiece = Tetromino(shape: shapes.randomElement()!)
         currentX = width / 2 - 2
         currentY = 0
         nextPiece = Tetromino(shape: shapes.randomElement()!)

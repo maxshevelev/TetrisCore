@@ -5,12 +5,10 @@ import TetrisCore
 import os
 
 public final class ConsoleGameUI: @unchecked Sendable {
-    private var input: ConsoleInputHandler?
     private let logger: Logger
     private let playerName: String?
 
     public init(logger: Logger = Logger(), playerName: String? = nil) {
-        self.input = ConsoleInputHandler()
         self.logger = logger
         self.playerName = playerName
     }
@@ -20,7 +18,11 @@ public final class ConsoleGameUI: @unchecked Sendable {
         print(Terminal.clear)
         fflush(stdout)
 
-        input?.start()
+        let input = ConsoleInputHandler()
+        input.start()
+
+        // Create the exit signal after the handler is fully initialized
+        let exitStream = AsyncStream<Void> { input.exitContinuation = $0 }
 
         let renderer = ConsoleRenderer(terminal: TerminalAdapter())
         let scoreStorage = ScoreStorage()
@@ -29,16 +31,13 @@ public final class ConsoleGameUI: @unchecked Sendable {
             settings.playerName = playerName
         }
 
-        let doneSemaphore = DispatchSemaphore(value: 0)
-
         let controller = GameController(
             logger: logger,
             logLevel: logLevel,
             scoreStorage: scoreStorage,
             settings: settings
         )
-        input?.setInputReceiver(controller)
-        input?.onExit = { doneSemaphore.signal() }
+        input.setInputReceiver(controller)
 
         let outputQueue = DispatchQueue(label: "tetris.output")
 
@@ -53,7 +52,7 @@ public final class ConsoleGameUI: @unchecked Sendable {
                     logger.debug("[Tick] \(events.map(\.label).sorted().formatted(), privacy: .public)")
                 }
                 acc.apply(events)
-                input?.currentDisplayState = acc.displayState
+                input.currentDisplayState = acc.displayState
                 let output = renderer.render(data: acc.snapshot())
                 outputQueue.async {
                     print(output, terminator: "")
@@ -64,21 +63,15 @@ public final class ConsoleGameUI: @unchecked Sendable {
 
         await controller.start()
 
-        // Wait for game over
-        await withUnsafeContinuation { (continuation: UnsafeContinuation<Void, Never>) in
-            DispatchQueue.global().async {
-                doneSemaphore.wait()
-                continuation.resume()
-            }
-        }
+        // Wait for game over via async flow
+        await exitStream.first(where: { _ in true })
 
-        // Cancel stream tasks and release controller
+        // Cancel stream tasks
         tasks.forEach { $0.cancel() }
 
         // Final cleanup
-        input?.stop()
-        input?.cleanup()
-        input = nil
+        input.stop()
+        input.cleanup()
         print(Terminal.clear)
         print(Terminal.showCursor)
         fflush(stdout)
@@ -92,11 +85,11 @@ extension GameEvent {
     var label: String {
         switch self {
         case .grid:             "grid"
-        case .pieceBlocks(_, _, let d): "piece" + (d.map { "↓\(String(format: "%.2f", $0))s" } ?? "")
+        case .pieceBlocks(_, _, let d): "piece" + (d.map { "←\(String(format: "%.2f", $0))s" } ?? "")
         case .nextPieceBlocks:  "next"
         case .score(let v):     "score(\(v))"
         case .level(let v):     "level(\(v))"
-        case .linesCleared(let v, let rows, let d): "lines(\(v))" + (rows.isEmpty ? "" : " rows:\(rows.sorted()) ↓\(String(format: "%.2f", d))s")
+        case .linesCleared(let v, let rows, let d): "lines(\(v))" + (rows.isEmpty ? "" : " rows:\(rows.sorted()) ←\(String(format: "%.2f", d))s")
         case .state(let v):     "state(\(v))"
         case .topScores(let v): "scores(\(v.count))"
         case .playerName(let v): "player(\(v))"

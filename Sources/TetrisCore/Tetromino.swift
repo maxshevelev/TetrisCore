@@ -17,53 +17,69 @@ public enum TetrominoShape: String, Sendable {
         }
     }
 
-    var blocks: [[[Int]]] {
-        switch self {
-        case .I:
-            return [
-                [[0, 1], [1, 1], [2, 1], [3, 1]],
-                [[1, 0], [1, 1], [1, 2], [1, 3]]
-            ]
-        case .O:
-            return [[[1, 0], [2, 0], [1, 1], [2, 1]]]
-        case .T:
-            return [
-                [[1, 0], [0, 1], [1, 1], [2, 1]],
-                [[1, 0], [1, 1], [2, 1], [1, 2]],
-                [[0, 1], [1, 1], [2, 1], [1, 2]],
-                [[1, 0], [0, 1], [1, 1], [1, 2]]
-            ]
-        case .S:
-            return [
-                [[1, 0], [2, 0], [0, 1], [1, 1]],
-                [[1, 0], [1, 1], [2, 1], [2, 2]]
-            ]
-        case .Z:
-            return [
-                [[0, 0], [1, 0], [1, 1], [2, 1]],
-                [[2, 0], [1, 1], [2, 1], [1, 2]]
-            ]
-        case .J:
-            return [
-                [[0, 0], [0, 1], [1, 1], [2, 1]],
-                [[1, 0], [2, 0], [1, 1], [1, 2]],
-                [[0, 1], [1, 1], [2, 1], [2, 2]],
-                [[1, 0], [1, 1], [1, 2], [0, 2]]
-            ]
-        case .L:
-            return [
-                [[2, 0], [0, 1], [1, 1], [2, 1]],
-                [[1, 0], [1, 1], [1, 2], [2, 2]],
-                [[0, 1], [1, 1], [2, 1], [0, 2]],
-                [[0, 0], [1, 0], [1, 1], [1, 2]]
-            ]
+    // MARK: - Precomputed shape data (static let — allocated once at startup)
+
+    private static let IStates = [
+        [[0, 1], [1, 1], [2, 1], [3, 1]],
+        [[1, 0], [1, 1], [1, 2], [1, 3]]
+    ]
+
+    private static let OStates = [
+        [[1, 0], [2, 0], [1, 1], [2, 1]]
+    ]
+
+    private static let TStates = [
+        [[1, 0], [0, 1], [1, 1], [2, 1]],
+        [[1, 0], [1, 1], [2, 1], [1, 2]],
+        [[0, 1], [1, 1], [2, 1], [1, 2]],
+        [[1, 0], [0, 1], [1, 1], [1, 2]]
+    ]
+
+    private static let SStates = [
+        [[1, 0], [2, 0], [0, 1], [1, 1]],
+        [[1, 0], [1, 1], [2, 1], [2, 2]]
+    ]
+
+    private static let ZStates = [
+        [[0, 0], [1, 0], [1, 1], [2, 1]],
+        [[2, 0], [1, 1], [2, 1], [1, 2]]
+    ]
+
+    private static let JStates = [
+        [[0, 0], [0, 1], [1, 1], [2, 1]],
+        [[1, 0], [2, 0], [1, 1], [1, 2]],
+        [[0, 1], [1, 1], [2, 1], [2, 2]],
+        [[1, 0], [1, 1], [1, 2], [0, 2]]
+    ]
+
+    private static let LStates = [
+        [[2, 0], [0, 1], [1, 1], [2, 1]],
+        [[1, 0], [1, 1], [1, 2], [2, 2]],
+        [[0, 1], [1, 1], [2, 1], [0, 2]],
+        [[0, 0], [1, 0], [1, 1], [1, 2]]
+    ]
+
+    // MARK: - Accessing states (no allocation)
+
+    func state(at rotationIndex: Int) -> [[Int]] {
+        let states = switch self {
+        case .I:   Self.IStates
+        case .O:   Self.OStates
+        case .T:   Self.TStates
+        case .S:   Self.SStates
+        case .Z:   Self.ZStates
+        case .J:   Self.JStates
+        case .L:   Self.LStates
         }
+        let count = states.count
+        let index = (rotationIndex % count + count) % count
+        return states[index]
     }
 }
 
 public struct Tetromino: Sendable {
     public let shape: TetrominoShape
-    public var rotationIndex: Int
+    public let rotationIndex: Int
 
     public init(shape: TetrominoShape, rotationIndex: Int = 0) {
         self.shape = shape
@@ -71,7 +87,7 @@ public struct Tetromino: Sendable {
     }
 
     public var blocks: [[Int]] {
-        shape.blocks[(rotationIndex % shape.blocks.count + shape.blocks.count) % shape.blocks.count]
+        shape.state(at: rotationIndex)
     }
 
     public func getAbsoluteCoordinates(xOffset: Int, yOffset: Int) -> [(x: Int, y: Int)] {
@@ -117,7 +133,7 @@ private func cwKickOffsets(for shape: TetrominoShape, fromRotation: Int) -> [(dx
 /// Return wall-kick offsets for rotating from `oldRotation` to `newRotation`.
 /// Handles both CW and CCW by looking up the stored CW table and flipping signs as needed.
 func wallKickOffsets(for shape: TetrominoShape, from oldRotation: Int, to newRotation: Int) -> [(dx: Int, dy: Int)] {
-    let stateCount = shape.blocks.count
+    let stateCount = shape.state(at: oldRotation).count
     let normalizedOld = (oldRotation % stateCount + stateCount) % stateCount
     let normalizedNew = (newRotation % stateCount + stateCount) % stateCount
 
