@@ -70,7 +70,7 @@ public actor GameController: InputReceiver {
 
     // MARK: - Score Storage
 
-    private let scoreStorage: ScoreStorage
+    private let scoreStorage: any ScoreStorageProtocol
     public let settings: any GameSettings
 
     // MARK: - Streams
@@ -98,7 +98,7 @@ public actor GameController: InputReceiver {
     public init(
         logger: Logger = Logger(),
         logLevel: LogLevel? = nil,
-        scoreStorage: ScoreStorage = ScoreStorage(),
+        scoreStorage: ScoreStorageProtocol = ScoreStorage(),
         settings: any GameSettings = PersistentGameSettings()
     ) {
         self.minLogLevel = logLevel

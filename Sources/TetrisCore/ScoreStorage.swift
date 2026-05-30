@@ -2,6 +2,11 @@
 
 import Foundation
 
+public protocol ScoreStorageProtocol: Sendable {
+    func add(score: Int, playerName: String) -> [StoredScore]
+    func topScores() -> [StoredScore]
+}
+
 public struct StoredScore: Hashable, Codable, Equatable, Sendable {
     public let playerName: String
     public let score: Int
@@ -12,7 +17,7 @@ public struct StoredScore: Hashable, Codable, Equatable, Sendable {
     }
 }
 
-public final class ScoreStorage: Sendable {
+public final class ScoreStorage: Sendable, ScoreStorageProtocol {
     private let filePath: URL
     private let queue = DispatchQueue(label: "tetris.scorestorage", qos: .userInitiated)
 
