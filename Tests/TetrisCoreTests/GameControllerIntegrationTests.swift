@@ -300,7 +300,13 @@ private func fillRow(_ row: Int, width: Int = 10) -> [PieceCoordinate: Tetromino
 struct StateMachineTests {
 
     // MARK: 1.1 start() transitions to playing and emits initial snapshot
-
+    //
+    // Scenario: A new game is started from the uninitialized state.
+    //
+    // Cases:
+    //   - Initial display state is .playing
+    //   - Tick yields the full initial snapshot: grid (current piece), score (0), playerName, and gridSize
+    //   - The snapshot is a diff — all mutable fields are emitted because there is no prior state to compare against
     @Test
     func start_transitions_to_playing_and_emits_initial_snapshot() async {
         let game = GameController(
@@ -317,7 +323,12 @@ struct StateMachineTests {
     }
 
     // MARK: 1.2 pause stops dropping and emits paused state
-
+    //
+    // Scenario: A running game (state .playing) receives a pause command.
+    //
+    // Cases:
+    //   - Tick yields display state .paused
+    //   - Game tick timer is stopped — no further piece-drop ticks occur while paused
     @Test
     func pause_stops_dropping_and_emits_paused_state() async {
         let game = GameController(
@@ -334,7 +345,12 @@ struct StateMachineTests {
     }
 
     // MARK: 1.3 resume returns from paused to playing
-
+    //
+    // Scenario: A paused game (state .paused) receives a resume command.
+    //
+    // Cases:
+    //   - Tick yields display state .playing
+    //   - Piece-drop timer restarts — the game resumes normal tick-driven drops
     @Test
     func resume_returns_from_paused_to_playing() async {
         let game = GameController(
@@ -353,7 +369,12 @@ struct StateMachineTests {
     }
 
     // MARK: 1.4 stop emits game over state
-
+    //
+    // Scenario: A running game (state .playing) receives a stop command.
+    //
+    // Cases:
+    //   - Tick yields display state .gameOver
+    //   - The game loop exits — no further events are yielded
     @Test
     func stop_emits_game_over_state() async {
         let game = GameController(
@@ -370,7 +391,13 @@ struct StateMachineTests {
     }
 
     // MARK: 1.5 start from gameOver restarts the game
-
+    //
+    // Scenario: A game in the .gameOver state receives a start command.
+    //
+    // Cases:
+    //   - The game resets to a fresh state (new piece, cleared grid, score zeroed)
+    //   - Tick yields display state .playing again
+    //   - A new initial snapshot is emitted (the old one is discarded)
     @Test
     func start_from_gameOver_restarts_the_game() async {
         let settings = TestableGameSettings()
@@ -391,8 +418,14 @@ struct StateMachineTests {
         #expect(state == .playing)
     }
 
-    // MARK: 1.6 invalid transition from initializing blocked
-
+    // MARK: 1.6 invalid transition from gameOver blocked
+    //
+    // Scenario: A game already in the .gameOver state receives a second stop command.
+    //
+    // Cases:
+    //   - No new state event is emitted (gameOver → gameOver is a no-op transition)
+    //   - The test uses a timeout to verify no tick arrives; without it the test would hang
+    //     because .next() blocks waiting for an event that will never come
     @Test
     func invalid_transition_from_initializing_is_blocked() async {
         let game = GameController(
@@ -413,8 +446,14 @@ struct StateMachineTests {
         #expect(secondStopEvents.isEmpty)
     }
 
-    // MARK: 1.7 pause from dropping twice produces only one paused event
-
+    // MARK: 1.7 double pause produces only one paused event
+    //
+    // Scenario: A running game (state .playing) receives two pause commands in succession.
+    //
+    // Cases:
+    //   - First pause: yields .paused state event
+    //   - Second pause (while already paused): no event emitted — transition is idempotent
+    //   - The timeout confirms no tick arrives for the second pause
     @Test
     func double_pause_produces_only_one_paused_event() async {
         let game = GameController(
@@ -435,8 +474,14 @@ struct StateMachineTests {
         #expect(secondPauseEvents.isEmpty)
     }
 
-    // MARK: 1.8 resume from paused cycles correctly
-
+    // MARK: 1.8 resume/pause cycling
+    //
+    // Scenario: A game toggles between .playing and .paused multiple times (play → pause → play → pause → play).
+    //
+    // Cases:
+    //   - Each resume from .paused yields .playing
+    //   - Each pause from .playing yields .paused
+    //   - The cycle is repeatable with no state leakage (no stale events from prior transitions)
     @Test
     func resume_from_paused_cycles_to_playing() async {
         let game = GameController(
