@@ -34,7 +34,7 @@ public actor GameController: InputReceiver {
                 stopDropTimer()
                 if oldValue != .gameOver {
                     log(.debug,"[Score] Saving score=\(score) level=\(level) player=\(settings.playerName)")
-                    scoreStorage.add(score: score, playerName: settings.playerName)
+                    _ = scoreStorage.add(score: score, playerName: settings.playerName)
                 }
             default: break
             }

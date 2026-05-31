@@ -235,10 +235,54 @@ private func linesClearedTotal(from events: Set<GameEvent>) -> Int? {
     return nil
 }
 
-/// Await the first tick event set from a GameController.
-private func awaitFirstTick(from game: GameController) async -> Set<GameEvent> {
-    var iterator = game.tick.makeAsyncIterator()
-    return (try? await iterator.next()) ?? []
+/// Per-test iterator owner — each test creates its own instance to own its tick iterator.
+private final class TickStream: @unchecked Sendable {
+    private var iterator: AsyncStream<Set<GameEvent>>.Iterator
+    init(_ tick: AsyncStream<Set<GameEvent>>) {
+        self.iterator = tick.makeAsyncIterator()
+    }
+    func next() async -> Set<GameEvent> {
+        await self.iterator.next() ?? []
+    }
+}
+
+/// Atomic first-writer to coordinate timeout race.
+private final class FirstValue<T>: @unchecked Sendable {
+    private let lock = NSLock()
+    private var value: T?
+    private var completed = false
+
+    func set(_ v: T) -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !completed else { return false }
+        value = v
+        completed = true
+        return true
+    }
+}
+
+/// Await a tick event with a timeout, returning an empty set if no event arrives.
+/// Used for multi-call tests where an invalid transition produces no state change
+/// and thus no yielded event — without a timeout the test would hang forever.
+private func tickNextWithTimeout(
+    ownedBy owner: TickStream,
+    timeout timeoutSec: Double
+) async -> Set<GameEvent> {
+    let timeoutNanos = UInt64(timeoutSec * 1_000_000_000)
+    let result = FirstValue<Set<GameEvent>>()
+    return await withCheckedContinuation { continuation in
+        Task {
+            try? await Task.sleep(nanoseconds: timeoutNanos)
+            guard result.set([]) else { return }
+            continuation.resume(returning: [])
+        }
+        Task {
+            let value = await owner.next()
+            guard result.set(value) else { return }
+            continuation.resume(returning: value)
+        }
+    }
 }
 
 /// Fill a complete row on the grid.
@@ -263,7 +307,9 @@ struct StateMachineTests {
             scoreStorage: TestableScoreStorage(),
             settings: TestableGameSettings()
         )
-        let events = await awaitFirstTick(from: game)
+        await game.start()
+        let tick = TickStream(game.tick)
+        let events = await await tick.next()
         let state = gameState(from: events)
         #expect(state == .playing)
         #expect(events.contains { if case .grid = $0 { return true } else { return false } })
@@ -279,9 +325,10 @@ struct StateMachineTests {
             settings: TestableGameSettings()
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
         await game.enqueue(ControlEvent.pause)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
         let state = gameState(from: events)
         #expect(state == GameDisplayState.paused)
     }
@@ -295,11 +342,12 @@ struct StateMachineTests {
             settings: TestableGameSettings()
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
         await game.enqueue(ControlEvent.pause)
-        _ = await awaitFirstTick(from: game)
+        _ = await await tick.next()
         await game.enqueue(ControlEvent.resume)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
         let state = gameState(from: events)
         #expect(state == .playing)
     }
@@ -313,9 +361,10 @@ struct StateMachineTests {
             settings: TestableGameSettings()
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
         await game.enqueue(ControlEvent.stop)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
         let state = gameState(from: events)
         #expect(state == .gameOver)
     }
@@ -331,12 +380,13 @@ struct StateMachineTests {
             settings: settings
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
         await game.enqueue(ControlEvent.stop)
-        _ = await awaitFirstTick(from: game)
+        _ = await await tick.next()
 
         await game.enqueue(ControlEvent.start)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
         let state = gameState(from: events)
         #expect(state == .playing)
     }
@@ -350,16 +400,17 @@ struct StateMachineTests {
             settings: TestableGameSettings()
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
         await game.enqueue(ControlEvent.stop)
-        let gameOverEvents = await awaitFirstTick(from: game)
+        let gameOverEvents = await await tick.next()
         #expect(gameState(from: gameOverEvents) == .gameOver)
 
         // Second stop while already in gameOver — no new state event
         await game.enqueue(ControlEvent.stop)
-        let secondStopEvents = await awaitFirstTick(from: game)
-        #expect(gameState(from: secondStopEvents) == .gameOver)
+        let secondStopEvents = await tickNextWithTimeout(ownedBy: tick, timeout: 0.5)
+        #expect(secondStopEvents.isEmpty)
     }
 
     // MARK: 1.7 pause from dropping twice produces only one paused event
@@ -371,16 +422,17 @@ struct StateMachineTests {
             settings: TestableGameSettings()
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
         await game.enqueue(ControlEvent.pause)
-        let firstPauseEvents = await awaitFirstTick(from: game)
+        let firstPauseEvents = await await tick.next()
         #expect(gameState(from: firstPauseEvents) == GameDisplayState.paused)
 
         // Second pause should have no effect (already paused)
         await game.enqueue(ControlEvent.pause)
-        let secondPauseEvents = await awaitFirstTick(from: game)
-        #expect(gameState(from: secondPauseEvents) == GameDisplayState.paused)
+        let secondPauseEvents = await tickNextWithTimeout(ownedBy: tick, timeout: 0.5)
+        #expect(secondPauseEvents.isEmpty)
     }
 
     // MARK: 1.8 resume from paused cycles correctly
@@ -392,23 +444,24 @@ struct StateMachineTests {
             settings: TestableGameSettings()
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
         await game.enqueue(ControlEvent.pause)
-        _ = await awaitFirstTick(from: game)
+        _ = await await tick.next()
 
         // Resume once
         await game.enqueue(ControlEvent.resume)
-        let firstResumeEvents = await awaitFirstTick(from: game)
+        let firstResumeEvents = await await tick.next()
         #expect(gameState(from: firstResumeEvents) == .playing)
 
         // Pause again
         await game.enqueue(ControlEvent.pause)
-        let secondPauseEvents = await awaitFirstTick(from: game)
+        let secondPauseEvents = await await tick.next()
         #expect(gameState(from: secondPauseEvents) == GameDisplayState.paused)
 
         // Resume again
         await game.enqueue(ControlEvent.resume)
-        let secondResumeEvents = await awaitFirstTick(from: game)
+        let secondResumeEvents = await await tick.next()
         #expect(gameState(from: secondResumeEvents) == .playing)
     }
 }
@@ -429,7 +482,8 @@ struct TickEventTests {
             settings: settings
         )
         await game.start()
-        let events = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        let events = await await tick.next()
 
         #expect(grid(from: events) != nil)
         #expect(gameState(from: events) == .playing)
@@ -445,18 +499,19 @@ struct TickEventTests {
             settings: TestableGameSettings()
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
         await game.enqueue(ControlEvent.pause)
-        let pauseEvents = await awaitFirstTick(from: game)
+        let pauseEvents = await await tick.next()
         #expect(gameState(from: pauseEvents) == GameDisplayState.paused)
 
         await game.enqueue(ControlEvent.resume)
-        let resumeEvents = await awaitFirstTick(from: game)
+        let resumeEvents = await await tick.next()
         #expect(gameState(from: resumeEvents) == .playing)
 
         await game.enqueue(ControlEvent.stop)
-        let stopEvents = await awaitFirstTick(from: game)
+        let stopEvents = await await tick.next()
         #expect(gameState(from: stopEvents) == .gameOver)
     }
 
@@ -469,11 +524,12 @@ struct TickEventTests {
             settings: TestableGameSettings()
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
         // Move left from x=3 — state should not change
         await game.enqueue(ControlEvent.moveLeft)
-        let events = await awaitFirstTick(from: game)
+        let events = await tickNextWithTimeout(ownedBy: tick, timeout: 0.5)
         // State should NOT be in the event set (diff: no change = no state event)
         #expect(gameState(from: events) == nil)
     }
@@ -487,7 +543,8 @@ struct TickEventTests {
             settings: TestableGameSettings()
         )
         await game.start()
-        let events = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        let events = await await tick.next()
         let initialScore = score(from: events)
         #expect(initialScore != nil) // Initial snapshot always includes all fields
     }
@@ -507,11 +564,12 @@ struct DiffBehaviorTests {
             settings: TestableGameSettings()
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
         // Move left from x=3 — this should actually move, so check for pieceBlocks
         await game.enqueue(ControlEvent.moveLeft)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
 
         // At least pieceBlocks should be emitted since piece moved
         let hasPieceEvent = events.contains { if case .pieceBlocks = $0 { return true } else { return false } }
@@ -527,11 +585,12 @@ struct DiffBehaviorTests {
             settings: TestableGameSettings()
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
         // Move piece — grid is empty, so no grid event should be emitted
         await game.enqueue(ControlEvent.moveLeft)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
 
         let hasGridEvent = events.contains { if case .grid = $0 { return true } else { return false } }
         #expect(hasGridEvent == false, "Grid should not change when piece moves in empty board")
@@ -552,12 +611,13 @@ struct InputBufferingTests {
             settings: TestableGameSettings()
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
         // Enqueue a sequence: moveLeft x3 (from x=3 should reach x=0)
         for _ in 0..<3 {
             await game.enqueue(ControlEvent.moveLeft)
-            _ = await awaitFirstTick(from: game)
+            _ = await await tick.next()
         }
 
         // The piece should be at x=0 or blocked
@@ -573,13 +633,14 @@ struct InputBufferingTests {
             settings: TestableGameSettings()
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
         // Rapid enqueue without waiting
         await game.enqueue(ControlEvent.moveLeft)
         await game.enqueue(ControlEvent.moveRight)
 
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
         // Piece should have moved and the events should arrive
         let hasPieceEvent = events.contains { if case .pieceBlocks = $0 { return true } else { return false } }
         #expect(hasPieceEvent == true)
@@ -604,10 +665,11 @@ struct ScoringTests {
         )
 
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
         await game.enqueue(ControlEvent.hardDrop)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
         let s = score(from: events)
         // Score event not emitted because score didn't change (0 → 0)
         // This confirms the diff mechanism works
@@ -632,7 +694,8 @@ struct ScoringTests {
                 settings: s
             )
             await game.start()
-            _ = await awaitFirstTick(from: game)
+            let tick = TickStream(game.tick)
+            _ = await await tick.next()
 
             // Pre-fill rows near the bottom
             for row in (20 - linesCount)..<19 {
@@ -640,7 +703,7 @@ struct ScoringTests {
             }
 
             await game.enqueue(ControlEvent.hardDrop)
-            let events = await awaitFirstTick(from: game)
+            let events = await await tick.next()
             let score = score(from: events)
             // Score event may or may not be present depending on whether lines were cleared
             // The key test is that score_increments_correctly() verifies score persistence
@@ -660,9 +723,10 @@ struct ScoringTests {
             settings: settings
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
         await game.enqueue(ControlEvent.hardDrop)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
         let score = score(from: events)
         // Score not emitted because it didn't change (0 → 0)
         #expect(score == nil)
@@ -679,13 +743,14 @@ struct ScoringTests {
             settings: settings
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
-        let initialEvents = await awaitFirstTick(from: game)
+        let initialEvents = await await tick.next()
         let initialScore = score(from: initialEvents) ?? 0
 
         await game.enqueue(ControlEvent.hardDrop)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
         let newScore = score(from: events) ?? 0
         // Score should not decrease
         #expect(newScore >= initialScore)
@@ -703,10 +768,11 @@ struct ScoringTests {
             settings: settings
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
         await game.enqueue(ControlEvent.stop)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
         #expect(gameState(from: events) == .gameOver)
 
         let topScores = storage.topScores()
@@ -731,10 +797,11 @@ struct HardDropTests {
             settings: settings
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
         await game.enqueue(ControlEvent.hardDrop)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
         let hasGridEvent = events.contains { if case .grid = $0 { return true } else { return false } }
         // Grid event confirms piece locked; pieceBlocks may or may not be emitted
         // (depends on whether new piece coords differ from initial spawn)
@@ -755,10 +822,11 @@ struct HardDropTests {
             settings: settings
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
         await game.enqueue(ControlEvent.hardDrop)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
         let grid = grid(from: events)
         #expect(grid != nil)
     }
@@ -775,10 +843,11 @@ struct HardDropTests {
             settings: settings
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
         await game.enqueue(ControlEvent.hardDrop)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
 
         // With animation enabled, the piece event should include a duration hint
         let hasPieceEvent = events.contains { if case .pieceBlocks = $0 { return true } else { return false } }
@@ -802,10 +871,11 @@ struct LineClearTests {
             settings: settings
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
         await game.enqueue(ControlEvent.hardDrop)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
 
         let info = linesClearedInfo(from: events)
         // Info may or may not be present depending on game state
@@ -823,7 +893,8 @@ struct LineClearTests {
             settings: settings
         )
         await game.start()
-        let events = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        let events = await await tick.next()
         let level = level(from: events)
         #expect(level == 5)
     }
@@ -845,7 +916,8 @@ struct SettingsTests {
             settings: settings
         )
         await game.start()
-        let events = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        let events = await await tick.next()
         let name = playerName(from: events)
         #expect(name == "Alice")
     }
@@ -861,7 +933,8 @@ struct SettingsTests {
             settings: settings
         )
         await game.start()
-        let events = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        let events = await await tick.next()
         let hasGhost = events.contains { if case .ghostPieceBlocks = $0 { return true } else { return false } }
         #expect(hasGhost == true)
     }
@@ -881,10 +954,11 @@ struct GameOverTests {
             settings: TestableGameSettings()
         )
         await game.start()
-        _ = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
 
         await game.enqueue(ControlEvent.stop)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
         let state = gameState(from: events)
         #expect(state == .gameOver)
     }
@@ -898,11 +972,12 @@ struct GameOverTests {
             settings: TestableGameSettings()
         )
         await game.start()
-        let initialEvents = await awaitFirstTick(from: game)
+        let tick = TickStream(game.tick)
+        let initialEvents = await await tick.next()
         let initialScore = score(from: initialEvents) ?? 0
 
         await game.enqueue(ControlEvent.stop)
-        let events = await awaitFirstTick(from: game)
+        let events = await await tick.next()
         let gameOverScore = score(from: events) ?? 0
         #expect(gameOverScore >= initialScore)
     }
