@@ -81,6 +81,7 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 - ✅ Game-over signal: `DispatchSemaphore` → native `AsyncStream<Void>` (async-first)
 - ✅ Ghost piece bg+fg colors (254 palette)
 - ✅ REVIEW items resolved (2.1, 6.3, 6.4, 6.5, 7.1, 6.2) — docs updated
+- ✅ GameController integration tests — 10 suites, 53 tests across state machine, tick events, diff behavior, input buffering, scoring, hard drop, line clear, settings, game over
 
 ## Review Items Fixed
 
@@ -92,13 +93,13 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 | §6.4 | `ModelState.description` visibility changed to internal | ✅ Fixed |
 | §6.5 | `.hardDrop` / `.start` strict separation verified + documented | ✅ Documented |
 | §7.1 | ScoreStorage iOS path safety (explicit `#elseif os(iOS)` + `??` fallback) | ✅ Fixed |
+| §5   | GameController integration tests — 10 suites, 53 tests | ✅ Fixed |
 
 ⚠️ `hardDropPiece()` lacks `!isHardDropAnimating` guard at the control-event dispatch level — `moveLeft`/`moveRight`/`rotate` all guard, `hardDrop` does not (see REVIEW.md §2.4)
 ⚠️ `ScoreStorage.add()` rejects legitimate duplicate scores globally — same player + same score across two separate games is dropped (see REVIEW.md §2.5)
 ⚠️ `removeClearedRows(_:)` is O(n × m) with `linesToClear.filter` inside the loop — pre-compute a `Set<Int>` of cleared rows (see REVIEW.md §2.6)
 ⚠️ Two `canMoveDown` overloads: mutating version is fragile, use `canMoveDown(from:)` everywhere (see REVIEW.md §2.7)
 ⚠️ `wallKickOffsets` is module-internal — test target (and future consumers) must duplicate the entire SRS data (see REVIEW.md §3.3)
-⚠️ Tests mirror internal helpers (`isColliding`, `canMoveDown`, `tryRotateWithKicks`) — zero `GameController` integration tests (see REVIEW.md §5)
 ⚠️ `shapes` array allocated fresh in `init()`, `resetGame()`, `spawnNextPiece()` — should be `private static let` (see REVIEW.md §6.1)
 ⚠️ `TetrominoShape.blocks` computed property allocates new `[[[Int]]]` on every access — see REVIEW.md §6.2
 ⚠️ Terminal size queried every render via `TIOCGWINSZ` ioctl — no SIGWINCH caching (see REVIEW.md §6.3)
@@ -109,6 +110,12 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 ⚠️ README `ControlEvent` source enum omits `.start` case (see REVIEW.md §4.8)
 
 ## Recent Changes
+
+### 2026-05-31
+
+- **State machine tests** — Added scenario comments to all 8 integration tests (1.1–1.8) covering start, pause, resume, stop, restart, idempotent transitions, and cycle toggle
+- **Test coverage section** — Added comprehensive test architecture to README: test files, categories (10 suites, 53 tests), test doubles (`TestableGameSettings`, `TestableScoreStorage`, `TickStream`, `FirstValue`)
+- **REVIEW.md §5 resolved** — GameController integration tests now exist (10 suites, 53 tests across state machine, tick events, diff behavior, input buffering, scoring, hard drop, line clear, settings, and game over)
 
 ### 2026-05-29
 
