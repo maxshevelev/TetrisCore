@@ -79,6 +79,57 @@ swift run tetris -d debug -u Alice
 swift test
 ```
 
+### Test Architecture
+
+Tests exercise `TetrisCore` from two angles: **unit** (internal helpers via `@testable import`) and **integration** (`GameController` actor via its public tick stream). All integration tests use per-test `TestableGameSettings` and `TestableScoreStorage` test doubles to avoid disk I/O and to drive settings (lock delay, animation toggles, initial level, ghost piece) in isolation.
+
+```
+Tests/
+├── TetrisCoreTests/
+│   ├── GameControllerTests.swift          ← Unit tests for internal helpers
+│   └── GameControllerIntegrationTests.swift  ← Integration tests via GameController
+```
+
+#### GameControllerTests — 43 unit tests
+
+Tests internal game logic helpers (`isColliding`, `canMoveDown`, SRS wall-kick simulation) directly.
+
+| Category | Tests | What it covers |
+|----------|-------|----------------|
+| Movement | 4 | `moveLeft` / `moveRight` into free space and against walls |
+| Rotation | 2 | CW/CCW rotation, rotation blocked by collision |
+| Hard Drop | 1 | Drops piece to lowest valid row |
+| Collision | 5 | Empty space, left/right/bottom walls, filled-block overlap |
+| Spawn | 2 | Initial position, game-over detection |
+| Line Clear | 5 | 0 / 1 / 2 / 3 / 4 lines, partial rows survive |
+| Wall Kick | 4 | T-piece near left wall, I-piece near right wall, obstacle avoidance, full blockage |
+
+#### GameControllerIntegrationTests — 53 integration tests
+
+Tests `GameController` end-to-end via its tick stream. Organized into 10 suites:
+
+| Suite | Tests | What it covers |
+|-------|-------|----------------|
+| **State Machine** (1.x) | 8 | Start, pause, resume, stop, restart from game over, idempotent transitions (double pause, double stop), multi-cycle toggle |
+| **Tick Events** (2.x) | 4 | Initial snapshot contents, start→pause→resume→stop sequence, no duplicate state events, score emission |
+| **Diff Behavior** (3.x) | 2 | No-op actions produce no events; grid event only on content change |
+| **Input Buffering** (4.x) | 2 | Event ordering, sequential processing of rapid enqueues |
+| **Scoring** (5.x) | 5 | Classical formula (40/100/300/1200 base × level multiplier), score persistence to storage |
+| **Hard Drop** (6.x) | 3 | Immediate lock, bottom placement, animation state emission |
+| **Line Clear** (7.x) | 2 | Row info in linesCleared event, initial level from settings |
+| **Settings** (8.x) | 2 | Player name emission, ghost piece emission when enabled |
+| **Game Over** (9.x) | 2 | Stop emits gameOver state, score carried through game over |
+
+#### Test Doubles
+
+| Double | Purpose |
+|--------|---------|
+| `TestableGameSettings` | In-memory `GameSettings` with per-property lock + `SettingsUpdateListener` notification |
+| `TestableScoreStorage` | In-memory `ScoreStorageProtocol` with `NSLock`-protected top-10 list |
+| `TickStream` | Per-test iterator wrapper for `AsyncStream<Set<GameEvent>>` — eliminates shared state between tests |
+| `FirstValue<T>` | Atomic first-writer for timeout races — prevents tests from hanging when an action produces no tick event |
+| `tickNextWithTimeout` | Wraps `.next()` with a timeout guard, returning `[]` when no event arrives within the window |
+
 ## Using TetrisCore as an SPM Dependency
 
 Add to your `Package.swift`:
