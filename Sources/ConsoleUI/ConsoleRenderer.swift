@@ -97,7 +97,7 @@ public struct ConsoleRenderer: GameRenderer, @unchecked Sendable {
         case .playing:
             statusText = "Lines: \(linesCleared)"
         case .paused:
-            statusText = "PAUSED - Press ESC to resume"
+            statusText = "PAUSED - Press ESC to resume, n for new game"
         case .gameOver:
             statusText = "Game Over"
         }

@@ -16,7 +16,7 @@ public actor GameController: InputReceiver {
     private static let validTransitions: [GameState: Set<GameState>] = [
         .initializing: [.dropping],
         .dropping: [.paused, .gameOver, .dropping],
-        .paused: [.dropping, .gameOver],
+        .paused: [.dropping, .gameOver, .initializing],
         .gameOver: [.initializing],
     ]
 
@@ -26,6 +26,8 @@ public actor GameController: InputReceiver {
         didSet {
             log(.debug,"[State] \(oldValue) -> \(state)")
             switch state {
+            case .initializing:
+                resetGame()
             case .dropping:
                 resetDropTimer()
             case .paused:
@@ -36,7 +38,6 @@ public actor GameController: InputReceiver {
                     log(.debug,"[Score] Saving score=\(score) level=\(level) player=\(settings.playerName)")
                     _ = scoreStorage.add(score: score, playerName: settings.playerName)
                 }
-            default: break
             }
         }
     }
@@ -51,7 +52,7 @@ public actor GameController: InputReceiver {
         state = newState
     }
 
-    private var grid: [PieceCoordinate: TetrominoColor]
+    private var grid: [PieceCoordinate: TetrominoColor] = [:]
     private var currentPiece: Tetromino?
     private var nextPiece: Tetromino?
     private var currentX = 0
@@ -105,13 +106,15 @@ public actor GameController: InputReceiver {
         self.log = logger
         self.scoreStorage = scoreStorage
         self.settings = settings
-        self.grid = [:]
 
         var tkc: AsyncStream<Set<GameEvent>>.Continuation!
         let tks = AsyncStream<Set<GameEvent>> { tkc = $0 }
         self.tickContinuation = tkc
         self.tick = tks
 
+        // Note: cannot call resetGame() here — init() runs outside actor isolation
+        // in Swift 6. Game state is initialized inline; resetGame() is called by
+        // the .initializing case in state.didSet for all subsequent resets.
         let shapes: [TetrominoShape] = [.I, .O, .T, .S, .Z, .J, .L]
         self.currentPiece = Tetromino(shape: shapes.randomElement()!)
         self.currentX = width / 2 - 2
@@ -208,14 +211,7 @@ public actor GameController: InputReceiver {
         sentGridSize = false
         pendingClearedRows = nil
         pieceBlockedOnLastTick = false
-    }
-
-    private func restart() {
-        log(.debug,"[LifeCycle] Game restarted")
-        resetGame()
-        transition(to: .initializing)
         transition(to: .dropping)
-        render()
     }
 
     // MARK: - Input Receiver
@@ -252,8 +248,7 @@ public actor GameController: InputReceiver {
                     hardDropPiece()
                 case .start:
                     log(.debug,"[Input] start")
-                    guard state == .gameOver else { continue }
-                    restart()
+                    transition(to: .initializing)
                 case .pause:
                     log(.debug,"[Input] pause")
                     guard isPlaying else { continue }

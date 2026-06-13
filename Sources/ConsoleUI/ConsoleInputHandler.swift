@@ -75,6 +75,10 @@ class ConsoleInputHandler: @unchecked Sendable {
             let event: ControlEvent = self.currentDisplayState == .paused ? .resume : .pause
             await self.inputReceiver?.enqueue(event)
         }
+        case "n": Task.detached { [weak self] in
+            guard let self, self.currentDisplayState == .paused else { return }
+            await self.inputReceiver?.enqueue(.start)
+        }
         case "q": Task.detached { [weak self] in
             guard let self else { return }
             if self.currentDisplayState == .gameOver {
