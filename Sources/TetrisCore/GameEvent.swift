@@ -16,4 +16,5 @@ public enum GameEvent: Hashable, Sendable {
     case playerName(String)
     case gridSize(width: Int, height: Int)
     case ghostPieceBlocks(Set<PieceCoordinate>)
+    case newPiece
 }
