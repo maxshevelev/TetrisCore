@@ -579,7 +579,45 @@ struct TickEventTests {
         #expect(gameState(from: events) == nil)
     }
 
-    // MARK: 2.4 Score event emitted when score changes
+    // MARK: 2.4 newPiece event emitted on initial tick
+
+    @Test
+    func newPiece_event_emitted_on_initial_tick() async {
+        let game = GameController(
+            scoreStorage: TestableScoreStorage(),
+            settings: TestableGameSettings()
+        )
+        await game.start()
+        let tick = TickStream(game.tick)
+        let events = await await tick.next()
+
+        let hasNewPiece = events.contains { $0 == .newPiece }
+        #expect(hasNewPiece == true, "Initial tick should emit .newPiece")
+    }
+
+    // MARK: 2.5 newPiece event emitted after hard drop spawns new piece
+
+    @Test
+    func newPiece_event_emitted_after_hard_drop_spawn() async {
+        let settings = TestableGameSettings()
+        settings.lockImmediatelyAfterHardDrop = true
+        settings.isHardDropAnimated = false
+        let game = GameController(
+            scoreStorage: TestableScoreStorage(),
+            settings: settings
+        )
+        await game.start()
+        let tick = TickStream(game.tick)
+        _ = await await tick.next()
+
+        await game.enqueue(ControlEvent.hardDrop)
+        let events = await await tick.next()
+
+        let hasNewPiece = events.contains { $0 == .newPiece }
+        #expect(hasNewPiece == true, "Hard drop should emit .newPiece when spawning the next piece")
+    }
+
+    // MARK: 2.6 Score event emitted when score changes
 
     @Test
     func score_event_emitted_when_score_changes() async {

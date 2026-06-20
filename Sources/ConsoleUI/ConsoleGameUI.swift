@@ -95,6 +95,7 @@ extension GameEvent {
         case .playerName(let v): "player(\(v))"
         case .gridSize(let w, let h): "gridSize(\(w)x\(h))"
         case .ghostPieceBlocks: "ghost"
+        case .newPiece:         "newPiece"
         }
     }
 }
@@ -133,6 +134,7 @@ private struct AccumulatedState {
             case .playerName(let v):  playerName = v
             case .gridSize(let w, let h): gridWidth = w; gridHeight = h
             case .ghostPieceBlocks(let v): ghostPieceCoords = v
+            case .newPiece: break // signal-only — no accumulated state
             }
         }
     }

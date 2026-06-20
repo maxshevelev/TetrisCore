@@ -126,6 +126,7 @@ Console-based Tetris game built as a Swift Package with no external UI dependenc
 - **`ghostPieceEnabled` setting** — Added to `GameSettings`, defaults to `true`
 - **`ghostPieceBlocks` event** — Added to `GameEvent`, emitted when ghost piece is enabled
 - **`gridSize(width: Int, height: Int)` event** — Added to `GameEvent`, emitted on initial tick
+- ✅ **`newPiece` event** — Added to `GameEvent`, emitted on every piece spawn (hard drop, line clear lock, game start) — replaces UI heuristic
 - **`hardDropDuration` in `pieceBlocks`** — Optional field to track hard-drop timing
 - **SRS wall-kick implementation** — Full SRS wall-kick tables with proper CW/CCW flip logic
 - **`CellType` abstraction** — Added `CellType` enum for clearer block state representation

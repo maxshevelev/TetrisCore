@@ -92,6 +92,7 @@ public actor GameController: InputReceiver {
     private var sentPlayerName: String?
     private var sentGridSize = false
     private var sentGhostPieceCoords: Set<PieceCoordinate>?
+    private var pendingNewPiece = false
     private var pendingHardDropDuration: TimeInterval?
     private var pendingClearedRows: (rows: Set<Int>, duration: TimeInterval)?
     private var isHardDropAnimating = false
@@ -120,6 +121,7 @@ public actor GameController: InputReceiver {
         self.currentX = width / 2 - 2
         self.currentY = 0
         self.nextPiece = Tetromino(shape: shapes.randomElement()!)
+        self.pendingNewPiece = true
     }
 
     // MARK: - Computed
@@ -207,6 +209,7 @@ public actor GameController: InputReceiver {
         nextPiece = Tetromino(shape: shapes.randomElement()!)
         score = 0
         linesCleared = 0
+        pendingNewPiece = true
         sentPlayerName = nil
         sentGridSize = false
         pendingClearedRows = nil
@@ -432,6 +435,7 @@ public actor GameController: InputReceiver {
         if currentPiece != nil {
             currentX = width / 2 - 2
             currentY = 0
+            pendingNewPiece = true
             log(.debug,"[Piece] Spawned \([currentPiece!.shape.rawValue])")
             if isColliding() {
                 log(.debug,"[GameOver] Score: \(score) Lines: \(linesCleared)")
@@ -490,6 +494,7 @@ public actor GameController: InputReceiver {
         if topScores != sentTopScores { events.insert(.topScores(topScores)); sentTopScores = topScores }
         if settings.playerName != sentPlayerName { events.insert(.playerName(settings.playerName)); sentPlayerName = settings.playerName }
         if !sentGridSize { events.insert(.gridSize(width: width, height: height)); sentGridSize = true }
+        if pendingNewPiece { events.insert(.newPiece); pendingNewPiece = false }
         if settings.isGhostPieceEnabled {
             let gpCoords = ghostPieceCoords
             if gpCoords != sentGhostPieceCoords { events.insert(.ghostPieceBlocks(gpCoords)); sentGhostPieceCoords = gpCoords }
